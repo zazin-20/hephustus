@@ -7,7 +7,32 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# V2: drop FK on violations.run_id so governance violations can be recorded
+# without a matching run row (e.g. triggered by rule scan, not by a runner).
+_SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS violations_v2 (
+  id           TEXT PRIMARY KEY,
+  rule_id      TEXT NOT NULL,
+  layer        TEXT NOT NULL,
+  severity     TEXT NOT NULL,
+  message      TEXT NOT NULL,
+  artifact     TEXT,
+  run_id       TEXT,
+  agent_id     TEXT,
+  issue_id     TEXT,
+  fix_hint     TEXT,
+  created_at   TEXT NOT NULL,
+  resolved_at  TEXT
+);
+INSERT OR IGNORE INTO violations_v2
+  SELECT id, rule_id, layer, severity, message, artifact,
+         run_id, agent_id, issue_id, fix_hint, created_at, resolved_at
+  FROM violations;
+DROP TABLE violations;
+ALTER TABLE violations_v2 RENAME TO violations;
+"""
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS profiles (
@@ -131,6 +156,10 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         conn.executescript(_SCHEMA_V1)
         _set_schema_version(conn, 1)
         applied.append(1)
+    if current < 2:
+        conn.executescript(_SCHEMA_V2)
+        _set_schema_version(conn, 2)
+        applied.append(2)
 
     conn.commit()
     return applied
