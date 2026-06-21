@@ -26,6 +26,7 @@ from hephaestus.store.profiles import get_profile as get_profile_record
 from hephaestus.store.profiles import list_profiles as list_profile_records
 from hephaestus.store.threads import list_threads as list_thread_records
 from hephaestus.store.threads import list_turns as list_turn_records
+from hephaestus.store.threads import set_included as set_turn_included_record
 from hephaestus.watch import OKFWatcher
 from hephaestus.workspace import Workspace
 
@@ -115,6 +116,11 @@ class Bridge:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         return [asdict(turn) for turn in list_turn_records(self._app._workspace.state_db_path, thread_id)]
+
+    def set_turn_included(self, turn_id: str, included: bool) -> None:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        set_turn_included_record(self._app._workspace.state_db_path, turn_id, bool(included))
 
     def send_message(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
         if self._app is None:

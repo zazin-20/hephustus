@@ -8,6 +8,7 @@ import {
   listThreads,
   onAgent,
   sendMessage,
+  setTurnIncluded,
 } from '../api.js'
 import { COORDINATOR_MOCK } from '../mock.js'
 
@@ -279,6 +280,21 @@ export default function Coordinator() {
     }
   }
 
+  async function toggleTurn(turn) {
+    const next = turn.included === false ? true : false
+    if (hasBridge()) {
+      await setTurnIncluded(turn.id, next)
+      if (selectedThreadId) {
+        const turns = (await getTranscript(selectedThreadId)) || []
+        setTranscript(turns)
+      }
+    } else {
+      setTranscript((current) =>
+        current.map((t) => (t.id === turn.id ? { ...t, included: next } : t)),
+      )
+    }
+  }
+
   async function submitMessage(event) {
     event.preventDefault()
     if (!selectedId || !draft.trim() || sending) return
@@ -514,12 +530,25 @@ export default function Coordinator() {
               <div className="max-h-[48vh] space-y-3 overflow-auto p-4">
                 {transcript.length ? (
                   transcript.map((turn) => {
+                    const excluded = turn.included === false
                     const tone = TURN_STYLE[renderTurnRole(turn)] || TURN_STYLE.assistant
                     return (
-                      <div key={turn.id} className={`rounded-xl border p-3 ${tone}`}>
+                      <div
+                        key={turn.id}
+                        className={`rounded-xl border p-3 transition-opacity ${tone} ${excluded ? 'opacity-40' : ''}`}
+                      >
                         <div className="mb-2 flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-slate-400">
                           <span>{renderTurnRole(turn)}</span>
-                          <span>{turn.kind || 'text'}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{turn.kind || 'text'}</span>
+                            <button
+                              type="button"
+                              onClick={() => void toggleTurn(turn)}
+                              className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:border-white/20 hover:text-slate-300"
+                            >
+                              {excluded ? 'Include' : 'Exclude'}
+                            </button>
+                          </div>
                         </div>
                         <div className="whitespace-pre-wrap text-sm leading-relaxed">{turn.text}</div>
                       </div>

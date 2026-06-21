@@ -18,7 +18,7 @@ from hephaestus.integration.runners import (
 )
 from hephaestus.store.profiles import Profile, create_profile, list_profiles
 from hephaestus.store.runs import create_run, finish_run, interrupt_running_runs
-from hephaestus.store.threads import append_turn, get_or_create_thread
+from hephaestus.store.threads import append_turn, compile_context, get_or_create_thread
 
 
 class SessionRegistry:
@@ -65,6 +65,18 @@ class PreparedRun:
 
 def default_runners() -> dict[Tool, AgentRunner]:
     return {Tool.CLAUDE: ClaudeRunner(), Tool.CODEX: CodexRunner()}
+
+
+def _compile_history(db_path, thread_id: str, current_run_id: str) -> str:
+    """Format included prior turns (excluding current run) as a context block."""
+    turns = [t for t in compile_context(db_path, thread_id) if t.run_id != current_run_id]
+    if not turns:
+        return ""
+    lines = ["--- Prior context ---"]
+    for turn in turns:
+        lines.append(f"[{turn.role}] {turn.text}")
+    lines.append("--- End prior context ---")
+    return "\n".join(lines)
 
 
 class AgentService:
@@ -122,6 +134,13 @@ class AgentService:
             prior = self.registry.get(run_task.role, run_task.issue_id, prepared.agent_id)
             if prior:
                 run_task = replace(run_task, resume=prior)
+
+        # Prepend compiled history from prior included turns (client-owned context, D5).
+        history = _compile_history(self.state_db_path, prepared.thread_id, prepared.run_id)
+        ctx = prepared.ctx
+        if history:
+            ctx = replace(ctx, system_prompt=history + "\n\n" + ctx.system_prompt if ctx.system_prompt else history)
+            prepared = replace(prepared, ctx=ctx)
 
         runner = self.runners[prepared.tool]
         lock = self._locks.setdefault(prepared.agent_id, asyncio.Lock())

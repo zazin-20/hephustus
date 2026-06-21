@@ -159,6 +159,31 @@ def list_turns(db_path, thread_id: str) -> list[Turn]:
     return [_row_to_turn(row) for row in rows]
 
 
+def compile_context(db_path, thread_id: str) -> list[Turn]:
+    """Return only included turns ordered by seq ASC — the client-owned context query."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, thread_id, run_id, seq, role, kind, text, included, created_at
+            FROM turns
+            WHERE thread_id = ? AND included = 1
+            ORDER BY seq ASC
+            """,
+            (thread_id,),
+        ).fetchall()
+    return [_row_to_turn(row) for row in rows]
+
+
+def set_included(db_path, turn_id: str, included: bool) -> None:
+    """Toggle a turn's included flag — soft, reversible pruning."""
+    with connect(db_path) as conn:
+        conn.execute(
+            "UPDATE turns SET included = ? WHERE id = ?",
+            (1 if included else 0, turn_id),
+        )
+        conn.commit()
+
+
 def list_threads(db_path, agent_id: str) -> list[Thread]:
     with connect(db_path) as conn:
         rows = conn.execute(
