@@ -21,6 +21,7 @@ from hephaestus.codeview import CodeViewer
 from hephaestus.dashboard import snapshot
 from hephaestus.integration import AgentService, AgentTask, Role
 from hephaestus.watch import OKFWatcher
+from hephaestus.workspace import Workspace
 
 try:
     import webview
@@ -68,9 +69,9 @@ class Bridge:
 
 class DesktopApp:
     def __init__(self, root: str | Path, code_roots: list[Path] | None = None):
-        self._root = Path(root)
-        # Default code-viewer roots: the Hephaestus project + the OKF root.
-        roots = code_roots or [PROJECT_ROOT, self._root.resolve()]
+        self._workspace = Workspace.open(root)
+        self._root = self._workspace.root
+        roots = code_roots or self._workspace.code_roots
         seen, deduped = set(), []
         for r in roots:
             rp = Path(r).resolve()

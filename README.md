@@ -53,7 +53,8 @@ The frontend (Vite + React + Tailwind) lives in `frontend/` and builds to
 
 Edit a file under `sample/agents/` while the app is open — the dashboard and
 compliance monitor update live. The **Code** tab browses the configured repos (by
-default the Hephaestus project + the OKF root) read-only, with syntax highlighting.
+default the workspace OKF root plus any top-level service repos with a `.git/`)
+read-only, with syntax highlighting.
 The **Agent** tab runs a role-routed Claude/Codex session (§5) — pick a role + issue,
 set a working dir, and watch output stream in. Run `npm --prefix frontend run dev` to
 preview the UI in a browser (it falls back to mock data when the Python bridge isn't
