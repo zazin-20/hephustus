@@ -138,6 +138,33 @@ class Bridge:
         )
         return [asdict(e) for e in events]
 
+    def parse_handoff_marker(self, text: str) -> dict | None:
+        """Parse a handoff marker from agent output text. Returns dict or null."""
+        from hephaestus.handoff import parse_handoff
+        marker = parse_handoff(text)
+        if marker is None:
+            return None
+        return {"role": marker.role, "task": marker.task, "issue_id": marker.issue_id}
+
+    def evaluate_spawn(self, role: str, task: str, issue_id: str) -> dict:
+        """Evaluate exit rules for the pending handoff. Returns SpawnCard dict."""
+        from hephaestus.handoff import HandoffMarker, evaluate_spawn_gate
+        from hephaestus.eval_context import EvaluationContext
+        from hephaestus.index import build_context
+        marker = HandoffMarker(role=role, task=task, issue_id=issue_id)
+        okf = build_context(self._root if self._app is None else self._app._root)
+        ctx = EvaluationContext(okf=okf, trace=[], contract={}, actor="orchestrator")
+        card = evaluate_spawn_gate(marker, ctx, exit_rules=[])
+        return {
+            "gating": card.gating.value,
+            "prefill_role": card.prefill_role,
+            "prefill_task": card.prefill_task,
+            "failures": [
+                {"rule_id": v.rule_id, "message": v.message, "fix_hint": v.fix_hint}
+                for v in card.failures
+            ],
+        }
+
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
     def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
         if self._app is None:
