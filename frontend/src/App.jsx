@@ -3,6 +3,7 @@ import Dashboard from './components/Dashboard.jsx'
 import Violations from './components/Violations.jsx'
 import CodeView from './components/CodeView.jsx'
 import RunAgent from './components/RunAgent.jsx'
+import Coordinator from './components/Coordinator.jsx'
 import { StatCard } from './components/ui.jsx'
 import { onPush, whenReady, getState, rescan, hasBridge } from './api.js'
 import { MOCK } from './mock.js'
@@ -50,7 +51,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5 text-xs">
-              {['compliance', 'code', 'agent'].map((v) => (
+              {['compliance', 'code', 'agent', 'coordinator'].map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -84,6 +85,8 @@ export default function App() {
           <CodeView />
         ) : view === 'agent' ? (
           <RunAgent />
+        ) : view === 'coordinator' ? (
+          <Coordinator />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

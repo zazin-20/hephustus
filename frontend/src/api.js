@@ -49,3 +49,30 @@ export async function runAgent(role, prompt, issue, cwd, model) {
 export function onAgent(cb) {
   window.__hephaestus_agent__ = cb
 }
+
+// --- Coordinator / profiles ---
+export async function listProfiles() {
+  if (window.pywebview?.api?.list_profiles) return await window.pywebview.api.list_profiles()
+  return null
+}
+
+export async function createProfile(name, role, rules, model, effort, workingDir) {
+  if (window.pywebview?.api?.create_profile) {
+    return await window.pywebview.api.create_profile(
+      name,
+      role,
+      rules,
+      model || null,
+      effort || null,
+      workingDir || null,
+    )
+  }
+  return null
+}
+
+export async function deleteProfile(agentId) {
+  if (window.pywebview?.api?.delete_profile) {
+    return await window.pywebview.api.delete_profile(agentId)
+  }
+  return null
+}

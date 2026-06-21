@@ -82,3 +82,39 @@ export const CODE_MOCK = {
     },
   },
 }
+
+export const COORDINATOR_MOCK = [
+  {
+    agent_id: 'arch-001',
+    name: 'Systems Architect',
+    role: 'architect',
+    rules: ['S-001', 'S-002'],
+    model: 'claude-opus',
+    effort: 'high',
+    working_dir: 'services/api',
+    created_at: '2026-06-22T00:00:00Z',
+    status: 'idle',
+  },
+  {
+    agent_id: 'work-001',
+    name: 'Implementation Worker',
+    role: 'worker',
+    rules: ['TDD', 'lint'],
+    model: 'gpt-5',
+    effort: 'medium',
+    working_dir: 'frontend',
+    created_at: '2026-06-22T00:05:00Z',
+    status: 'idle',
+  },
+  {
+    agent_id: 'qa-001',
+    name: 'Evidence QA',
+    role: 'qa',
+    rules: ['QA-Checklist'],
+    model: null,
+    effort: 'low',
+    working_dir: 'tests',
+    created_at: '2026-06-22T00:08:00Z',
+    status: 'idle',
+  },
+]
