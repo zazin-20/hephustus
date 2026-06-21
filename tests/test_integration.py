@@ -241,3 +241,31 @@ def test_service_resumes_captured_session():
 
     asyncio.run(go())
     assert runner.seen_resume == [None, "sess-xyz"]  # second run resumed the captured session
+
+
+def test_compiled_history_injected_into_system_prompt(tmp_path):
+    """Second run's context must contain prior-turn history block."""
+    captured_prompts: list[str] = []
+
+    class CapturingRunner:
+        tool = Tool.CLAUDE
+
+        async def run(self, task, ctx):
+            captured_prompts.append(ctx.system_prompt)
+            yield AgentEvent("text", task.prompt)
+            yield AgentEvent("result", "done")
+
+    async def go():
+        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        task = AgentTask(role=Role.ARCHITECT, prompt="first message", issue_id="issue-001")
+        async for _ in service.run(task):
+            pass
+        task2 = AgentTask(role=Role.ARCHITECT, prompt="second message", issue_id="issue-001")
+        async for _ in service.run(task2):
+            pass
+
+    asyncio.run(go())
+    assert len(captured_prompts) == 2
+    assert "Prior context" not in captured_prompts[0]  # first run has no history
+    assert "Prior context" in captured_prompts[1]       # second run sees the first

@@ -93,3 +93,9 @@ export async function deleteProfile(agentId) {
   }
   return null
 }
+
+export async function setTurnIncluded(turnId, included) {
+  if (window.pywebview?.api?.set_turn_included)
+    return await window.pywebview.api.set_turn_included(turnId, included)
+  return null
+}
