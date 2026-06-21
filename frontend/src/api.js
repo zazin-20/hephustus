@@ -93,3 +93,9 @@ export async function deleteProfile(agentId) {
   }
   return null
 }
+
+export async function getTrace(runId, agentId) {
+  if (window.pywebview?.api?.get_trace)
+    return await window.pywebview.api.get_trace(runId || null, agentId || null)
+  return []
+}

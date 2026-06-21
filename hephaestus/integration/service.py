@@ -19,6 +19,8 @@ from hephaestus.integration.runners import (
 from hephaestus.store.profiles import Profile, create_profile, list_profiles
 from hephaestus.store.runs import create_run, finish_run, interrupt_running_runs
 from hephaestus.store.threads import append_turn, get_or_create_thread
+from hephaestus.store.trace import append_trace_event
+from hephaestus.integration.runners import _extract_target_path
 
 
 class SessionRegistry:
@@ -144,10 +146,19 @@ class AgentService:
                         self.state_db_path,
                         prepared.thread_id,
                         run_id=prepared.run_id,
-                        role="tool" if event.kind == "tool" else "assistant",
+                        role="tool" if event.kind in ("tool", "tool_call") else "assistant",
                         kind=event.kind,
                         text=event.text,
                     )
+                    if event.kind == "tool_call" and event.raw:
+                        append_trace_event(
+                            self.state_db_path,
+                            run_id=prepared.run_id,
+                            agent_id=prepared.agent_id,
+                            action=event.raw.get("action", "unknown"),
+                            target_path=_extract_target_path(event.raw.get("input") or {}),
+                            raw=event.raw,
+                        )
                     yield event
             except Exception as exc:
                 append_turn(

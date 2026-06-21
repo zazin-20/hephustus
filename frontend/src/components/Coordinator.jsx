@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createProfile,
   deleteProfile,
+  getTrace,
   getTranscript,
   hasBridge,
   listProfiles,
@@ -112,6 +113,8 @@ export default function Coordinator() {
   const [draft, setDraft] = useState('')
   const [issueId, setIssueId] = useState('')
   const [sending, setSending] = useState(false)
+  const [traceEvents, setTraceEvents] = useState([])
+  const [showTrace, setShowTrace] = useState(false)
   const activeRunId = useRef(null)
   const activeAgentId = useRef(null)
   const activeThreadId = useRef(null)
@@ -134,13 +137,22 @@ export default function Coordinator() {
       if (ev.kind === 'done') {
         setSending(false)
         if (activeAgentId.current) void loadThreadsFor(activeAgentId.current, activeThreadId.current)
+        if (activeRunId.current && hasBridge()) {
+          void getTrace(activeRunId.current, null).then(setTraceEvents)
+        }
         return
+      }
+      if (ev.kind === 'tool_call') {
+        setTraceEvents((current) => [
+          ...current,
+          { id: `live-${current.length}`, action: ev.text, target_path: null, ts: new Date().toISOString() },
+        ])
       }
       setTranscript((current) => [
         ...current,
         {
           id: `${ev.run_id}-${current.length}`,
-          role: ev.kind === 'tool' ? 'tool' : 'assistant',
+          role: ev.kind === 'tool' || ev.kind === 'tool_call' ? 'tool' : 'assistant',
           kind: ev.kind,
           text: ev.text,
         },
@@ -155,6 +167,7 @@ export default function Coordinator() {
     if (!selectedId) {
       setThreads([])
       setTranscript([])
+      setTraceEvents([])
       setSelectedThreadId(null)
       setIssueId('')
       return
@@ -290,6 +303,7 @@ export default function Coordinator() {
     setSending(true)
     setError('')
     setDraft('')
+    setTraceEvents([])
     setTranscript((current) => [
       ...current,
       {
@@ -531,6 +545,44 @@ export default function Coordinator() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/5 bg-black/20 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowTrace((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-300 hover:bg-white/5"
+              >
+                <span>Trace {traceEvents.length ? `(${traceEvents.length})` : ''}</span>
+                <span className="text-slate-500 text-xs">{showTrace ? '▲ hide' : '▼ show'}</span>
+              </button>
+              {showTrace && (
+                <div className="border-t border-white/5 max-h-48 overflow-auto p-3 space-y-1.5">
+                  {traceEvents.length === 0 ? (
+                    <div className="text-xs text-slate-500 text-center py-4">No trace events for this run.</div>
+                  ) : (
+                    traceEvents.map((ev, i) => {
+                      const actionStyle =
+                        ev.action === 'write_file' || ev.action === 'Write'
+                          ? 'bg-orange-500/15 text-orange-300 ring-orange-500/30'
+                          : ev.action === 'read_file' || ev.action === 'Read'
+                          ? 'bg-sky-500/15 text-sky-300 ring-sky-500/30'
+                          : 'bg-slate-500/15 text-slate-300 ring-white/10'
+                      return (
+                        <div key={ev.id || i} className="flex items-center gap-2 text-xs">
+                          <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${actionStyle}`}>
+                            {ev.action}
+                          </span>
+                          {ev.target_path && (
+                            <span className="truncate font-mono text-slate-400">{ev.target_path}</span>
+                          )}
+                          <span className="ml-auto shrink-0 text-slate-600">{ev.ts ? ev.ts.slice(11, 19) : ''}</span>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
             <form onSubmit={submitMessage} className="space-y-3 rounded-2xl border border-white/5 bg-black/20 p-4">
