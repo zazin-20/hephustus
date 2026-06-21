@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createProfile,
   deleteProfile,
+  evaluateSpawn,
   getTrace,
   getTranscript,
   hasBridge,
   listProfiles,
   listThreads,
   onAgent,
+  parseHandoffMarker,
   sendMessage,
   setTurnIncluded,
 } from '../api.js'
@@ -116,6 +118,7 @@ export default function Coordinator() {
   const [sending, setSending] = useState(false)
   const [traceEvents, setTraceEvents] = useState([])
   const [showTrace, setShowTrace] = useState(false)
+  const [spawnCard, setSpawnCard] = useState(null)
   const activeRunId = useRef(null)
   const activeAgentId = useRef(null)
   const activeThreadId = useRef(null)
@@ -142,6 +145,14 @@ export default function Coordinator() {
           void getTrace(activeRunId.current, null).then(setTraceEvents)
         }
         return
+      }
+      if (ev.kind === 'text' && hasBridge() && ev.text) {
+        void parseHandoffMarker(ev.text).then((marker) => {
+          if (!marker) return
+          void evaluateSpawn(marker.role, marker.task, marker.issue_id).then((card) => {
+            if (card) setSpawnCard({ ...card, marker })
+          })
+        })
       }
       if (ev.kind === 'tool_call') {
         setTraceEvents((current) => [
@@ -320,6 +331,7 @@ export default function Coordinator() {
     setError('')
     setDraft('')
     setTraceEvents([])
+    setSpawnCard(null)
     setTranscript((current) => [
       ...current,
       {
@@ -613,6 +625,46 @@ export default function Coordinator() {
                 </div>
               )}
             </div>
+
+            {spawnCard && (
+              <div className={`rounded-2xl border p-4 ${spawnCard.gating === 'green' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${spawnCard.gating === 'green' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'}`}>
+                    {spawnCard.gating === 'green' ? '✓ Ready to Spawn' : '⚠ Spawn (with failures)'}
+                  </span>
+                  <span className="text-xs text-slate-400">→ <strong>{spawnCard.prefill_role}</strong>: {spawnCard.prefill_task}</span>
+                </div>
+                {spawnCard.failures?.length > 0 && (
+                  <ul className="mb-3 space-y-1">
+                    {spawnCard.failures.map((f, i) => (
+                      <li key={i} className="text-xs text-amber-300">
+                        <span className="font-mono">{f.rule_id}</span> — {f.message}
+                        {f.fix_hint && <span className="ml-1 text-amber-400/60">({f.fix_hint})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft(spawnCard.prefill_task)
+                      setSpawnCard(null)
+                    }}
+                    className="rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90"
+                  >
+                    Confirm Spawn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpawnCard(null)}
+                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={submitMessage} className="space-y-3 rounded-2xl border border-white/5 bg-black/20 p-4">
               <Field label="Issue (optional)">

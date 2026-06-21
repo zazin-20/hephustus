@@ -105,3 +105,16 @@ export async function getTrace(runId, agentId) {
     return await window.pywebview.api.get_trace(runId || null, agentId || null)
   return []
 }
+
+// --- Handoff / gated Spawn ---
+export async function parseHandoffMarker(text) {
+  if (window.pywebview?.api?.parse_handoff_marker)
+    return await window.pywebview.api.parse_handoff_marker(text)
+  return null
+}
+
+export async function evaluateSpawn(role, task, issueId) {
+  if (window.pywebview?.api?.evaluate_spawn)
+    return await window.pywebview.api.evaluate_spawn(role, task, issueId)
+  return null
+}
