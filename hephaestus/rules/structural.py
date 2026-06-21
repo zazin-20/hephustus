@@ -1,13 +1,13 @@
 """Built-in structural rules S-001 .. S-006 (see spec/rules/structural.md).
 
 These check filesystem/frontmatter relationships only — no LLM. They read from
-the OKFContext index, never the disk. Each rule notes where its logic adapts the
-spec to the per-issue-document OKF layout.
+the OKFContext index via EvaluationContext.okf, never the disk. Each rule notes
+where its logic adapts the spec to the per-issue-document OKF layout.
 """
 from __future__ import annotations
 
 from hephaestus.core import Severity, Violation, ViolationResult
-from hephaestus.index import OKFContext
+from hephaestus.eval_context import EvaluationContext
 from hephaestus.models import IssueStatus
 from hephaestus.rules.base import HephaestusRule
 
@@ -22,11 +22,11 @@ class S001WorkerNeedsSpec(HephaestusRule):
         "handoff, QA, or log artifact references that issue."
     )
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
         referenced = (
-            {h.issue_id for h in ctx.handoffs}
-            | {e.issue_id for e in ctx.qa_evidence}
-            | {e.issue_id for e in ctx.log_entries}
+            {h.issue_id for h in ctx.okf.handoffs}
+            | {e.issue_id for e in ctx.okf.qa_evidence}
+            | {e.issue_id for e in ctx.okf.log_entries}
         )
         violations = [
             Violation(
@@ -36,7 +36,7 @@ class S001WorkerNeedsSpec(HephaestusRule):
                 artifact=f"agents/architect/issues/{iid}.md",
                 fix_hint=self.fix_hint,
             )
-            for iid in sorted(referenced - ctx.issue_ids)
+            for iid in sorted(referenced - ctx.okf.issue_ids)
         ]
         return ViolationResult.of(violations)
 
@@ -51,9 +51,9 @@ class S002WorkerMustLeaveHandoff(HephaestusRule):
         "is marked done."
     )
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
-        done = {i.id for i in ctx.issues if i.status == IssueStatus.DONE}
-        handed = {h.issue_id for h in ctx.handoffs}
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
+        done = {i.id for i in ctx.okf.issues if i.status == IssueStatus.DONE}
+        handed = {h.issue_id for h in ctx.okf.handoffs}
         violations = [
             Violation(
                 rule_id=self.id,
@@ -77,9 +77,9 @@ class S003QANeedsEvidence(HephaestusRule):
         "appears in the completion log."
     )
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
-        logged = {e.issue_id for e in ctx.log_entries}
-        evidenced = {e.issue_id for e in ctx.qa_evidence}
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
+        logged = {e.issue_id for e in ctx.okf.log_entries}
+        evidenced = {e.issue_id for e in ctx.okf.qa_evidence}
         violations = [
             Violation(
                 rule_id=self.id,
@@ -100,10 +100,10 @@ class S004LogEntryForCompletion(HephaestusRule):
     roles_involved = ["orchestrator"]
     fix_hint = "Add a completion record at agents/log/<id>.md for this issue."
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
-        done_ids = {i.id for i in ctx.issues if i.status == IssueStatus.DONE}
-        done_with_evidence = {e.issue_id for e in ctx.qa_evidence if e.issue_id in done_ids}
-        logged = {e.issue_id for e in ctx.log_entries}
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
+        done_ids = {i.id for i in ctx.okf.issues if i.status == IssueStatus.DONE}
+        done_with_evidence = {e.issue_id for e in ctx.okf.qa_evidence if e.issue_id in done_ids}
+        logged = {e.issue_id for e in ctx.okf.log_entries}
         violations = [
             Violation(
                 rule_id=self.id,
@@ -127,8 +127,8 @@ class S005HandoffNeedsArchitectReview(HephaestusRule):
         "evidence is created."
     )
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
-        evidenced = {e.issue_id for e in ctx.qa_evidence}
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
+        evidenced = {e.issue_id for e in ctx.okf.qa_evidence}
         violations = [
             Violation(
                 rule_id=self.id,
@@ -140,7 +140,7 @@ class S005HandoffNeedsArchitectReview(HephaestusRule):
                 artifact=f"agents/architect/handoffs/{h.issue_id}.md",
                 fix_hint=self.fix_hint,
             )
-            for h in ctx.handoffs
+            for h in ctx.okf.handoffs
             if h.issue_id in evidenced and "architect" not in h.reviewed_by
         ]
         return ViolationResult.of(violations)
@@ -156,8 +156,8 @@ class S006SprintStateConsistent(HephaestusRule):
         "close the issue in the index or reopen the sprint."
     )
 
-    def check(self, ctx: OKFContext) -> ViolationResult:
-        closed_sprints = {e.sprint for e in ctx.log_entries if e.sprint_closed}
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
+        closed_sprints = {e.sprint for e in ctx.okf.log_entries if e.sprint_closed}
         violations = [
             Violation(
                 rule_id=self.id,
@@ -169,7 +169,7 @@ class S006SprintStateConsistent(HephaestusRule):
                 artifact="agents/architect/issues/index.md",
                 fix_hint=self.fix_hint,
             )
-            for ref in ctx.issues_index.open_issues
+            for ref in ctx.okf.issues_index.open_issues
             if ref.sprint in closed_sprints
         ]
         return ViolationResult.of(violations)
