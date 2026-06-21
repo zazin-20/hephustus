@@ -36,6 +36,15 @@ def test_workspace_open_creates_operational_store(tmp_path):
     assert [path.name for path in workspace.service_roots] == ["service-a", "service-b"]
 
 
+def test_workspace_open_accepts_explicit_service_roots(tmp_path):
+    root = _make_workspace(tmp_path)
+    explicit = [root / "service-b"]
+
+    workspace = Workspace.open(root, service_roots=explicit)
+
+    assert list(workspace.service_roots) == [explicit[0].resolve()]
+
+
 def test_desktop_app_uses_workspace_code_roots_by_default(tmp_path):
     root = _make_workspace(tmp_path)
 

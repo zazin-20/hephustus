@@ -9,6 +9,8 @@ from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.routing import Role, Tool, tool_for
 from hephaestus.integration.runners import AgentEvent, AgentTask, EchoRunner, build_codex_argv
 from hephaestus.integration.service import AgentService, SessionRegistry
+from hephaestus.store.runs import get_run
+from hephaestus.store.threads import list_turns
 
 
 def test_routing_is_static_and_role_based():
@@ -78,6 +80,121 @@ def test_service_routes_worker_through_codex_echo():
     assert "echo:codex" in joined          # routed to the codex backend
     assert "issue-003" in joined           # issue context threaded through
     assert "hello worker" in joined
+
+
+def test_service_persists_run_lifecycle_and_transcript(tmp_path):
+    agents = tmp_path / "agents" / "architect"
+    agents.mkdir(parents=True)
+    (agents / "architect.md").write_text("ARCHITECT DIRECTIVE", encoding="utf-8")
+    issues = tmp_path / "agents" / "architect" / "issues"
+    issues.mkdir(parents=True)
+    (issues / "issue-003.md").write_text("ISSUE 003", encoding="utf-8")
+
+    async def go():
+        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        service = AgentService(tmp_path, runners=runners)
+        prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="design the fix", issue_id="issue-003"))
+
+        running = get_run(service.state_db_path, prepared.run_id)
+        assert running.status == "running"
+
+        return service, prepared, [event async for event in service.run(prepared)]
+
+    service, prepared, events = asyncio.run(go())
+    finished = get_run(service.state_db_path, prepared.run_id)
+    turns = list_turns(service.state_db_path, prepared.thread_id)
+
+    assert finished.status == "done"
+    assert [turn.role for turn in turns] == ["user", "assistant", "assistant", "assistant", "assistant"]
+    assert [turn.kind for turn in turns] == ["text", "system", "system", "text", "result"]
+    assert [turn.text for turn in turns] == [
+        "design the fix",
+        "[echo:claude] role=architect issue=issue-003",
+        "context files: ['architect.md', 'issue-003.md']",
+        "design the fix",
+        "ok",
+    ]
+    assert [event.kind for event in events] == ["system", "system", "text", "result"]
+
+
+def test_service_reuses_thread_for_same_actor_and_issue(tmp_path):
+    async def go():
+        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        service = AgentService(tmp_path, runners=runners)
+
+        first = service.begin(AgentTask(role=Role.ARCHITECT, prompt="first pass", issue_id="issue-003"))
+        async for _ in service.run(first):
+            pass
+
+        second = service.begin(AgentTask(role=Role.ARCHITECT, prompt="follow up", issue_id="issue-003"))
+        async for _ in service.run(second):
+            pass
+
+        return service, first, second
+
+    service, first, second = asyncio.run(go())
+    turns = list_turns(service.state_db_path, second.thread_id)
+
+    assert second.thread_id == first.thread_id
+    assert [turn.text for turn in turns if turn.role == "user"] == ["first pass", "follow up"]
+
+
+def test_runs_serialize_per_actor_but_parallel_across_actors(tmp_path):
+    class CountingRunner:
+        tool = Tool.CLAUDE
+
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+
+        async def run(self, task, ctx):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            await asyncio.sleep(0.05)
+            yield AgentEvent("text", task.prompt)
+            await asyncio.sleep(0.05)
+            self.active -= 1
+            yield AgentEvent("result", "done")
+
+    async def drain(service, task):
+        return [event async for event in service.run(task)]
+
+    async def same_actor():
+        runner = CountingRunner()
+        service = AgentService(tmp_path / "same", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        await asyncio.gather(
+            drain(service, AgentTask(role=Role.ARCHITECT, prompt="one", issue_id="issue-003")),
+            drain(service, AgentTask(role=Role.ARCHITECT, prompt="two", issue_id="issue-003")),
+        )
+        return runner.max_active
+
+    async def different_actors():
+        runner = CountingRunner()
+        service = AgentService(tmp_path / "different", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        await asyncio.gather(
+            drain(service, AgentTask(role=Role.ARCHITECT, prompt="architect", issue_id="issue-003")),
+            drain(service, AgentTask(role=Role.QA, prompt="qa", issue_id="issue-003")),
+        )
+        return runner.max_active
+
+    assert asyncio.run(same_actor()) == 1
+    assert asyncio.run(different_actors()) == 2
+
+
+def test_service_marks_incomplete_runs_interrupted_on_next_open(tmp_path):
+    service = AgentService(tmp_path, runners={Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)})
+    prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="recover me", issue_id="issue-003"))
+
+    interrupted_service = AgentService(
+        tmp_path,
+        runners={Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)},
+    )
+    interrupted = get_run(interrupted_service.state_db_path, prepared.run_id)
+    turns = list_turns(interrupted_service.state_db_path, prepared.thread_id)
+
+    assert interrupted.status == "interrupted"
+    assert interrupted.ended_at is not None
+    assert [turn.text for turn in turns] == ["recover me"]
 
 
 def test_session_registry_keys():

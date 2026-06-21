@@ -15,7 +15,6 @@ import asyncio
 from dataclasses import asdict
 import json
 import threading
-import uuid
 from pathlib import Path
 
 from hephaestus.codeview import CodeViewer
@@ -23,7 +22,10 @@ from hephaestus.dashboard import snapshot
 from hephaestus.integration import AgentService, AgentTask, Role
 from hephaestus.store.profiles import create_profile as create_profile_record
 from hephaestus.store.profiles import delete_profile as delete_profile_record
+from hephaestus.store.profiles import get_profile as get_profile_record
 from hephaestus.store.profiles import list_profiles as list_profile_records
+from hephaestus.store.threads import list_threads as list_thread_records
+from hephaestus.store.threads import list_turns as list_turn_records
 from hephaestus.watch import OKFWatcher
 from hephaestus.workspace import Workspace
 
@@ -104,6 +106,21 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         delete_profile_record(self._app._workspace.state_db_path, agent_id)
 
+    def list_threads(self, agent_id: str) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        return [asdict(thread) for thread in list_thread_records(self._app._workspace.state_db_path, agent_id)]
+
+    def get_transcript(self, thread_id: str) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        return [asdict(turn) for turn in list_turn_records(self._app._workspace.state_db_path, thread_id)]
+
+    def send_message(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        return self._app.start_profile_agent(agent_id, prompt, issue_id, model)
+
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
     def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
         if self._app is None:
@@ -156,25 +173,43 @@ class DesktopApp:
             cwd=Path(cwd) if cwd else None,
             model=model or None,
         )
-        tool, ctx = self._agents.resolve(task)
-        run_id = uuid.uuid4().hex[:8]
-        asyncio.run_coroutine_threadsafe(self._stream_agent(run_id, task), self._loop)
+        return self._start_task(task)
+
+    def start_profile_agent(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
+        if self._loop is None:
+            raise RuntimeError("core loop not started yet")
+        profile = get_profile_record(self._workspace.state_db_path, agent_id)
+        task = AgentTask(
+            role=Role(profile.role),
+            prompt=prompt,
+            issue_id=issue_id or None,
+            agent_id=agent_id,
+            cwd=Path(profile.working_dir) if profile.working_dir else None,
+            model=model or profile.model,
+        )
+        return self._start_task(task)
+
+    def _start_task(self, task: AgentTask) -> dict:
+        prepared = self._agents.begin(task)
+        asyncio.run_coroutine_threadsafe(self._stream_agent(prepared), self._loop)
         return {
-            "run_id": run_id,
+            "run_id": prepared.run_id,
+            "thread_id": prepared.thread_id,
+            "agent_id": prepared.agent_id,
             "role": task.role.value,
-            "tool": tool.value,
-            "context": [p.name for p in ctx.files],
-            "missing": [p.name for p in ctx.missing],
+            "tool": prepared.tool.value,
+            "context": [p.name for p in prepared.ctx.files],
+            "missing": [p.name for p in prepared.ctx.missing],
         }
 
-    async def _stream_agent(self, run_id: str, task: AgentTask) -> None:
+    async def _stream_agent(self, prepared) -> None:
         try:
-            async for ev in self._agents.run(task):
-                self._push_agent(run_id, ev.kind, ev.text)
+            async for ev in self._agents.run(prepared):
+                self._push_agent(prepared.run_id, ev.kind, ev.text)
         except Exception as exc:  # surface failures to the UI, don't die silently
-            self._push_agent(run_id, "error", str(exc))
+            self._push_agent(prepared.run_id, "error", str(exc))
         finally:
-            self._push_agent(run_id, "done", "")
+            self._push_agent(prepared.run_id, "done", "")
 
     def _push_agent(self, run_id: str, kind: str, text: str) -> None:
         if self._window is None:

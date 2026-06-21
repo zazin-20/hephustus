@@ -1,12 +1,9 @@
-"""Agent service: route a task to the right runner + track sessions.
+"""Agent service: route a task to the right runner and persist the run lifecycle."""
 
-Hephaestus is not the orchestrator (spec/architecture.md §1) — this is the
-integration *plumbing* the Orchestrator (or a human, or the desktop UI) uses to
-run a role-appropriate session with the correct OKF context injected.
-"""
 from __future__ import annotations
 
-from dataclasses import replace
+import asyncio
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -19,27 +16,51 @@ from hephaestus.integration.runners import (
     ClaudeRunner,
     CodexRunner,
 )
+from hephaestus.store.profiles import Profile, create_profile, list_profiles
+from hephaestus.store.runs import create_run, finish_run, interrupt_running_runs
+from hephaestus.store.threads import append_turn, get_or_create_thread
 
 
 class SessionRegistry:
-    """Sessions tagged by role + issue id for resumability (spec §5.1)."""
+    """Sessions tagged by actor + issue id for resumability."""
 
     def __init__(self):
         self._sessions: dict[str, str] = {}
 
     @staticmethod
-    def key(role: Role | str, issue_id: str | None) -> str:
-        r = role.value if isinstance(role, Role) else str(role)
-        return f"{r}:{issue_id}" if issue_id else r
+    def key(role: Role | str, issue_id: str | None, agent_id: str | None = None) -> str:
+        actor = agent_id or (role.value if isinstance(role, Role) else str(role))
+        return f"{actor}:{issue_id}" if issue_id else actor
 
-    def get(self, role: Role | str, issue_id: str | None = None) -> str | None:
-        return self._sessions.get(self.key(role, issue_id))
+    def get(
+        self,
+        role: Role | str,
+        issue_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> str | None:
+        return self._sessions.get(self.key(role, issue_id, agent_id))
 
-    def set(self, role: Role | str, issue_id: str | None, session_id: str) -> None:
-        self._sessions[self.key(role, issue_id)] = session_id
+    def set(
+        self,
+        role: Role | str,
+        issue_id: str | None,
+        session_id: str,
+        agent_id: str | None = None,
+    ) -> None:
+        self._sessions[self.key(role, issue_id, agent_id)] = session_id
 
     def all(self) -> dict[str, str]:
         return dict(self._sessions)
+
+
+@dataclass(frozen=True)
+class PreparedRun:
+    task: AgentTask
+    agent_id: str
+    thread_id: str
+    run_id: str
+    tool: Tool
+    ctx: SessionContext
 
 
 def default_runners() -> dict[Tool, AgentRunner]:
@@ -48,35 +69,136 @@ def default_runners() -> dict[Tool, AgentRunner]:
 
 class AgentService:
     def __init__(self, root: str | Path, runners: dict[Tool, AgentRunner] | None = None):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
+        self.state_db_path = self.root / ".hephaestus" / "state.db"
         self.runners = runners or default_runners()
         self.registry = SessionRegistry()
+        self._locks: dict[str, asyncio.Lock] = {}
+        interrupt_running_runs(self.state_db_path)
 
     def resolve(self, task: AgentTask) -> tuple[Tool, SessionContext]:
         tool = tool_for(task.role)
         ctx = build_session_context(self.root, task.role, task.issue_id)
         return tool, ctx
 
-    async def run(self, task: AgentTask) -> AsyncIterator[AgentEvent]:
+    def begin(self, task: AgentTask) -> PreparedRun:
+        profile = self._resolve_profile(task)
+        task = replace(task, agent_id=profile.agent_id)
         tool, ctx = self.resolve(task)
+        thread = get_or_create_thread(
+            self.state_db_path,
+            agent_id=profile.agent_id,
+            issue_id=task.issue_id,
+            name=task.issue_id or profile.name,
+        )
+        run = create_run(
+            self.state_db_path,
+            thread_id=thread.id,
+            agent_id=profile.agent_id,
+            contract=self._contract(profile, task, tool),
+        )
+        append_turn(
+            self.state_db_path,
+            thread.id,
+            run_id=run.id,
+            role="user",
+            kind="text",
+            text=task.prompt,
+        )
+        return PreparedRun(
+            task=task,
+            agent_id=profile.agent_id,
+            thread_id=thread.id,
+            run_id=run.id,
+            tool=tool,
+            ctx=ctx,
+        )
 
-        # Resume a prior session for this role:issue if one is known (spec §5.1).
-        if task.resume is None:
-            prior = self.registry.get(task.role, task.issue_id)
+    async def run(self, work: AgentTask | PreparedRun) -> AsyncIterator[AgentEvent]:
+        prepared = work if isinstance(work, PreparedRun) else self.begin(work)
+        run_task = prepared.task
+
+        if run_task.resume is None:
+            prior = self.registry.get(run_task.role, run_task.issue_id, prepared.agent_id)
             if prior:
-                task = replace(task, resume=prior)
+                run_task = replace(run_task, resume=prior)
 
-        runner = self.runners[tool]
-        async for event in runner.run(task, ctx):
-            # Capture the session id from the result so the next call can resume.
-            if event.kind == "result" and event.raw and event.raw.get("session_id"):
-                self.registry.set(task.role, task.issue_id, event.raw["session_id"])
-            yield event
+        runner = self.runners[prepared.tool]
+        lock = self._locks.setdefault(prepared.agent_id, asyncio.Lock())
+        usage = None
+
+        async with lock:
+            try:
+                async for event in runner.run(run_task, prepared.ctx):
+                    if event.kind == "result" and event.raw and event.raw.get("session_id"):
+                        self.registry.set(
+                            run_task.role,
+                            run_task.issue_id,
+                            event.raw["session_id"],
+                            prepared.agent_id,
+                        )
+                    if event.kind == "result" and event.raw:
+                        usage = event.raw.get("usage")
+
+                    append_turn(
+                        self.state_db_path,
+                        prepared.thread_id,
+                        run_id=prepared.run_id,
+                        role="tool" if event.kind == "tool" else "assistant",
+                        kind=event.kind,
+                        text=event.text,
+                    )
+                    yield event
+            except Exception as exc:
+                append_turn(
+                    self.state_db_path,
+                    prepared.thread_id,
+                    run_id=prepared.run_id,
+                    role="assistant",
+                    kind="error",
+                    text=str(exc),
+                )
+                finish_run(self.state_db_path, prepared.run_id, status="error")
+                raise
+            else:
+                finish_run(self.state_db_path, prepared.run_id, status="done", usage=usage)
+
+    def _resolve_profile(self, task: AgentTask) -> Profile:
+        profiles = list_profiles(self.state_db_path)
+        if task.agent_id:
+            for profile in profiles:
+                if profile.agent_id == task.agent_id:
+                    return profile
+            raise KeyError(task.agent_id)
+
+        for profile in profiles:
+            if profile.role == task.role.value:
+                return profile
+
+        return create_profile(
+            self.state_db_path,
+            self.root,
+            name=task.role.value.replace("-", " ").title(),
+            role=task.role.value,
+            rules=[],
+            model=task.model,
+            working_dir=str(task.cwd) if task.cwd else None,
+        )
+
+    def _contract(self, profile: Profile, task: AgentTask, tool: Tool) -> dict:
+        return {
+            "agent_id": profile.agent_id,
+            "role": profile.role,
+            "tool": tool.value,
+            "issue_id": task.issue_id,
+            "model": task.model or profile.model,
+            "effort": profile.effort,
+            "cwd": str(task.cwd) if task.cwd else profile.working_dir,
+        }
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    import asyncio
 
     from hephaestus.integration.runners import EchoRunner
 

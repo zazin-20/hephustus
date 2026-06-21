@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   agent_id     TEXT PRIMARY KEY,
   name         TEXT NOT NULL,
   role         TEXT NOT NULL,
-  rules        JSON NOT NULL,
+  rules        TEXT NOT NULL,
   model        TEXT,
   effort       TEXT,
   working_dir  TEXT,
@@ -34,10 +34,10 @@ CREATE TABLE IF NOT EXISTS runs (
   id           TEXT PRIMARY KEY,
   thread_id    TEXT NOT NULL REFERENCES threads(id),
   agent_id     TEXT NOT NULL REFERENCES profiles(agent_id),
-  contract     JSON NOT NULL,
+  contract     TEXT NOT NULL,
   status       TEXT NOT NULL,
-  usage        JSON,
-  outcome      JSON,
+  usage        TEXT,
+  outcome      TEXT,
   started_at   TEXT NOT NULL,
   ended_at     TEXT
 );
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS trace_events (
   ts           TEXT NOT NULL,
   action       TEXT NOT NULL,
   target_path  TEXT,
-  raw          JSON
+  raw          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS violations (

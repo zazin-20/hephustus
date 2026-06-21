@@ -31,14 +31,21 @@ class Workspace:
     state_db_path: Path
 
     @classmethod
-    def open(cls, root: str | Path) -> "Workspace":
+    def open(
+        cls,
+        root: str | Path,
+        service_roots: list[Path] | tuple[Path, ...] | None = None,
+    ) -> "Workspace":
         workspace_root = Path(root).resolve()
         state_db_path = workspace_root / ".hephaestus" / "state.db"
         conn = connect(state_db_path)
         conn.close()
+        roots = service_roots
+        if roots is None:
+            roots = discover_service_roots(workspace_root)
         return cls(
             root=workspace_root,
-            service_roots=tuple(discover_service_roots(workspace_root)),
+            service_roots=tuple(Path(path).resolve() for path in roots),
             state_db_path=state_db_path,
         )
 

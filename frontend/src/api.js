@@ -50,6 +50,23 @@ export function onAgent(cb) {
   window.__hephaestus_agent__ = cb
 }
 
+export async function listThreads(agentId) {
+  if (window.pywebview?.api?.list_threads) return await window.pywebview.api.list_threads(agentId)
+  return null
+}
+
+export async function getTranscript(threadId) {
+  if (window.pywebview?.api?.get_transcript) return await window.pywebview.api.get_transcript(threadId)
+  return null
+}
+
+export async function sendMessage(agentId, prompt, issueId, model) {
+  if (window.pywebview?.api?.send_message) {
+    return await window.pywebview.api.send_message(agentId, prompt, issueId || null, model || null)
+  }
+  return null
+}
+
 // --- Coordinator / profiles ---
 export async function listProfiles() {
   if (window.pywebview?.api?.list_profiles) return await window.pywebview.api.list_profiles()

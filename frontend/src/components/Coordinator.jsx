@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react'
-import { createProfile, deleteProfile, hasBridge, listProfiles } from '../api.js'
+import { useEffect, useRef, useState } from 'react'
+import {
+  createProfile,
+  deleteProfile,
+  getTranscript,
+  hasBridge,
+  listProfiles,
+  listThreads,
+  onAgent,
+  sendMessage,
+} from '../api.js'
 import { COORDINATOR_MOCK } from '../mock.js'
 
 const INPUT =
@@ -16,6 +25,12 @@ const ROLE_STYLE = {
 
 const STATUS_STYLE = {
   idle: 'bg-slate-500/15 text-slate-300 ring-white/10',
+}
+
+const TURN_STYLE = {
+  user: 'border-orange-500/20 bg-orange-500/10 text-orange-100',
+  assistant: 'border-white/10 bg-black/20 text-slate-200',
+  tool: 'border-sky-500/20 bg-sky-500/10 text-sky-100',
 }
 
 const EMPTY_FORM = {
@@ -78,6 +93,12 @@ function nextMockId(profiles, role) {
   return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
+function renderTurnRole(turn) {
+  if (turn.role === 'user') return 'user'
+  if (turn.role === 'tool') return 'tool'
+  return 'assistant'
+}
+
 export default function Coordinator() {
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(null)
@@ -85,10 +106,61 @@ export default function Coordinator() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [threads, setThreads] = useState([])
+  const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [transcript, setTranscript] = useState([])
+  const [draft, setDraft] = useState('')
+  const [issueId, setIssueId] = useState('')
+  const [sending, setSending] = useState(false)
+  const activeRunId = useRef(null)
+  const activeAgentId = useRef(null)
+  const activeThreadId = useRef(null)
 
   useEffect(() => {
     loadProfiles()
   }, [])
+
+  useEffect(() => {
+    activeAgentId.current = selectedId
+  }, [selectedId])
+
+  useEffect(() => {
+    activeThreadId.current = selectedThreadId
+  }, [selectedThreadId])
+
+  useEffect(() => {
+    onAgent((ev) => {
+      if (ev.run_id !== activeRunId.current) return
+      if (ev.kind === 'done') {
+        setSending(false)
+        if (activeAgentId.current) void loadThreadsFor(activeAgentId.current, activeThreadId.current)
+        return
+      }
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `${ev.run_id}-${current.length}`,
+          role: ev.kind === 'tool' ? 'tool' : 'assistant',
+          kind: ev.kind,
+          text: ev.text,
+        },
+      ])
+    })
+    return () => {
+      window.__hephaestus_agent__ = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedId) {
+      setThreads([])
+      setTranscript([])
+      setSelectedThreadId(null)
+      setIssueId('')
+      return
+    }
+    void loadThreadsFor(selectedId, null)
+  }, [selectedId])
 
   async function loadProfiles() {
     if (!hasBridge()) {
@@ -104,6 +176,35 @@ export default function Coordinator() {
       if (current && nextProfiles.some((profile) => profile.agent_id === current)) return current
       return nextProfiles[0]?.agent_id ?? null
     })
+  }
+
+  async function loadThreadsFor(agentId, preferredThreadId) {
+    if (!hasBridge()) {
+      setThreads([])
+      setTranscript([])
+      setSelectedThreadId(null)
+      return
+    }
+
+    const rows = (await listThreads(agentId)) || []
+    setThreads(rows)
+    const nextThreadId =
+      preferredThreadId ||
+      (activeThreadId.current && rows.some((thread) => thread.id === activeThreadId.current)
+        ? activeThreadId.current
+        : rows[0]?.id || null)
+
+    setSelectedThreadId(nextThreadId)
+    const activeThread = rows.find((thread) => thread.id === nextThreadId) || null
+    setIssueId(activeThread?.issue_id || '')
+
+    if (!nextThreadId) {
+      setTranscript([])
+      return
+    }
+
+    const turns = (await getTranscript(nextThreadId)) || []
+    setTranscript(turns)
   }
 
   function updateField(key, value) {
@@ -175,6 +276,55 @@ export default function Coordinator() {
       setError(err?.message || 'Failed to delete profile.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function submitMessage(event) {
+    event.preventDefault()
+    if (!selectedId || !draft.trim() || sending) return
+
+    const message = draft.trim()
+    const threadIssue = threads.find((thread) => thread.id === selectedThreadId)?.issue_id || ''
+    const nextIssue = issueId.trim() || threadIssue || null
+
+    setSending(true)
+    setError('')
+    setDraft('')
+    setTranscript((current) => [
+      ...current,
+      {
+        id: `draft-${Date.now()}`,
+        role: 'user',
+        kind: 'text',
+        text: message,
+      },
+    ])
+
+    if (!hasBridge()) {
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `preview-${Date.now()}`,
+          role: 'assistant',
+          kind: 'text',
+          text: `Preview mode: ${message}`,
+        },
+      ])
+      setSending(false)
+      return
+    }
+
+    try {
+      const res = await sendMessage(selectedId, message, nextIssue, null)
+      activeRunId.current = res?.run_id || null
+      if (res?.thread_id) {
+        setSelectedThreadId(res.thread_id)
+        activeThreadId.current = res.thread_id
+      }
+      if (nextIssue) setIssueId(nextIssue)
+    } catch (err) {
+      setSending(false)
+      setError(err?.message || 'Failed to send message.')
     }
   }
 
@@ -324,7 +474,7 @@ export default function Coordinator() {
 
       <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-6">
         {selected ? (
-          <div className="space-y-4">
+          <div className="flex min-h-[70vh] flex-col gap-4">
             <div className="border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <div className="text-lg font-semibold text-slate-100">{selected.name}</div>
@@ -332,40 +482,84 @@ export default function Coordinator() {
                 <StatusBadge status={selected.status || 'idle'} />
               </div>
               <div className="mt-2 font-mono text-xs text-slate-500">{selected.agent_id}</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(selected.rules || []).length ? (
-                  selected.rules.map((rule) => (
-                    <span
-                      key={rule}
-                      className="rounded-full bg-white/5 px-2 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-white/10"
-                    >
-                      {rule}
-                    </span>
-                  ))
+              <div className="mt-4">
+                <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">Threads</div>
+                <div className="flex flex-wrap gap-2">
+                  {threads.length ? (
+                    threads.map((thread) => (
+                      <button
+                        key={thread.id}
+                        type="button"
+                        onClick={() => void loadThreadsFor(selected.agent_id, thread.id)}
+                        className={`rounded-full border px-3 py-1 text-xs transition ${
+                          selectedThreadId === thread.id
+                            ? 'border-orange-400/40 bg-orange-500/10 text-orange-100'
+                            : 'border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-slate-200'
+                        }`}
+                      >
+                        {thread.issue_id || thread.name}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-500">No persisted threads yet.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden rounded-2xl border border-white/5 bg-black/20">
+              <div className="border-b border-white/5 px-4 py-3 text-sm font-semibold text-slate-200">
+                Conversation
+              </div>
+              <div className="max-h-[48vh] space-y-3 overflow-auto p-4">
+                {transcript.length ? (
+                  transcript.map((turn) => {
+                    const tone = TURN_STYLE[renderTurnRole(turn)] || TURN_STYLE.assistant
+                    return (
+                      <div key={turn.id} className={`rounded-xl border p-3 ${tone}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-slate-400">
+                          <span>{renderTurnRole(turn)}</span>
+                          <span>{turn.kind || 'text'}</span>
+                        </div>
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed">{turn.text}</div>
+                      </div>
+                    )
+                  })
                 ) : (
-                  <span className="text-sm text-slate-500">No explicit rules attached.</span>
+                  <div className="grid min-h-[220px] place-items-center text-center text-sm text-slate-500">
+                    Open a profile thread or send the first message to start one.
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="grid gap-3 text-sm text-slate-400 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/5 bg-black/20 p-4">
-                <div className="text-xs uppercase tracking-wider text-slate-500">Model</div>
-                <div className="mt-1 text-slate-200">{selected.model || 'Not set'}</div>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-black/20 p-4">
-                <div className="text-xs uppercase tracking-wider text-slate-500">Effort</div>
-                <div className="mt-1 text-slate-200">{selected.effort || 'Not set'}</div>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:col-span-2">
-                <div className="text-xs uppercase tracking-wider text-slate-500">Working Directory</div>
-                <div className="mt-1 break-all text-slate-200">{selected.working_dir || 'Not set'}</div>
-              </div>
-            </div>
-
-            <div className="grid min-h-[240px] place-items-center rounded-2xl border border-dashed border-white/10 bg-black/20 px-6 text-center text-sm text-slate-500">
-              Select a profile to start a conversation
-            </div>
+            <form onSubmit={submitMessage} className="space-y-3 rounded-2xl border border-white/5 bg-black/20 p-4">
+              <Field label="Issue (optional)">
+                <input
+                  value={issueId}
+                  onChange={(event) => setIssueId(event.target.value)}
+                  className={INPUT}
+                  placeholder="issue-003"
+                />
+              </Field>
+              <Field label="Message">
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={5}
+                  className={`${INPUT} resize-y font-mono`}
+                  placeholder="Send a message to this agent..."
+                />
+              </Field>
+              {error ? <div className="text-xs text-rose-300">{error}</div> : null}
+              <button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                className="rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 px-4 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-40"
+              >
+                {sending ? 'Sending...' : 'Send message'}
+              </button>
+            </form>
           </div>
         ) : (
           <div className="grid min-h-[70vh] place-items-center rounded-2xl border border-dashed border-white/10 bg-black/20 px-6 text-center text-sm text-slate-500">

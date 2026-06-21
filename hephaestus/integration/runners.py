@@ -35,6 +35,7 @@ class AgentTask:
     role: Role
     prompt: str
     issue_id: str | None = None
+    agent_id: str | None = None
     cwd: Path | None = None
     model: str | None = None
     resume: str | None = None    # prior session id to resume (spec §5.1)
