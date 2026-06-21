@@ -107,17 +107,46 @@ def _claude_options(ctx: SessionContext, task: AgentTask):
     return claude_sdk.ClaudeAgentOptions(**kwargs)
 
 
-def _claude_event(msg) -> AgentEvent:
+def _claude_event(msg) -> AgentEvent | list[AgentEvent]:
+    """Map a claude-agent-sdk message to one or more AgentEvents.
+
+    AssistantMessage content may contain both text blocks and ToolUseBlocks;
+    we emit a separate tool_call event for each tool use so the trace layer
+    can record it independently.
+    """
     name = type(msg).__name__
     text_parts = []
+    tool_events: list[AgentEvent] = []
+
     content = getattr(msg, "content", None)
     if isinstance(content, list):
         for block in content:
-            t = getattr(block, "text", None)
-            if t:
-                text_parts.append(t)
+            block_type = getattr(block, "type", None) or type(block).__name__
+            # ToolUseBlock
+            if block_type in ("tool_use", "ToolUseBlock") or hasattr(block, "input"):
+                tool_name = getattr(block, "name", "") or ""
+                tool_input = getattr(block, "input", {}) or {}
+                if isinstance(tool_input, dict):
+                    tool_events.append(AgentEvent(
+                        kind="tool_call",
+                        text=tool_name,
+                        raw={"action": tool_name, "input": tool_input},
+                    ))
+            else:
+                t = getattr(block, "text", None)
+                if t:
+                    text_parts.append(t)
     elif isinstance(content, str):
         text_parts.append(content)
+
+    if tool_events:
+        # If there are tool events alongside text, emit text first then tools.
+        events: list[AgentEvent] = []
+        if text_parts:
+            events.append(AgentEvent(kind="text", text="".join(text_parts)))
+        events.extend(tool_events)
+        return events
+
     kind = {"AssistantMessage": "text", "ResultMessage": "result"}.get(name, "system")
     sid = getattr(msg, "session_id", None)
     raw = {"session_id": sid} if sid else None
@@ -132,7 +161,12 @@ class ClaudeRunner:
             raise RuntimeError("claude-agent-sdk not installed; run: pip install -e .[agents]")
         options = _claude_options(ctx, task)
         async for msg in claude_sdk.query(prompt=task.prompt, options=options):
-            yield _claude_event(msg)
+            result = _claude_event(msg)
+            if isinstance(result, list):
+                for ev in result:
+                    yield ev
+            else:
+                yield result
 
 
 # --------------------------------------------------------------------------- #
@@ -166,6 +200,15 @@ def _codex_command() -> list[str]:
     return [exe]
 
 
+def _extract_target_path(input_dict: dict) -> str | None:
+    """Derive a human-readable target path from a tool input dict."""
+    for key in ("file_path", "path", "cmd", "command"):
+        val = input_dict.get(key)
+        if val is not None:
+            return str(val)
+    return None
+
+
 def _codex_event(raw: dict) -> AgentEvent:
     """Map a `codex exec --json` JSONL event to an AgentEvent.
 
@@ -173,11 +216,22 @@ def _codex_event(raw: dict) -> AgentEvent:
       {"type":"thread.started","thread_id":...}
       {"type":"turn.started"}
       {"type":"item.completed","item":{"type":"agent_message","text":"..."}}
+      {"type":"item.completed","item":{"type":"function_call","name":"shell","arguments":{...}}}
       {"type":"turn.completed","usage":{...}}
     """
     raw_kind = raw.get("type") or raw.get("kind") or "event"
     item = raw.get("item") if isinstance(raw.get("item"), dict) else None
     msg = raw.get("msg") if isinstance(raw.get("msg"), dict) else None
+
+    # function_call items → tool_call events
+    if item and item.get("type") == "function_call":
+        name = item.get("name", "")
+        arguments = item.get("arguments") or {}
+        return AgentEvent(
+            kind="tool_call",
+            text=name,
+            raw={"action": name, "input": arguments},
+        )
 
     text = raw.get("text") or raw.get("message") or raw.get("delta") or ""
     if not text and item:

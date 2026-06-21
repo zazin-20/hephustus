@@ -99,3 +99,9 @@ export async function setTurnIncluded(turnId, included) {
     return await window.pywebview.api.set_turn_included(turnId, included)
   return null
 }
+
+export async function getTrace(runId, agentId) {
+  if (window.pywebview?.api?.get_trace)
+    return await window.pywebview.api.get_trace(runId || null, agentId || null)
+  return []
+}

@@ -127,6 +127,17 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         return self._app.start_profile_agent(agent_id, prompt, issue_id, model)
 
+    def get_trace(self, run_id: str | None = None, agent_id: str | None = None) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        from hephaestus.store.trace import list_trace_events
+        events = list_trace_events(
+            self._app._workspace.state_db_path,
+            run_id=run_id or None,
+            agent_id=agent_id or None,
+        )
+        return [asdict(e) for e in events]
+
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
     def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
         if self._app is None:
