@@ -12,6 +12,7 @@ Launch:  py -m hephaestus.desktop [root]
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 import json
 import threading
 import uuid
@@ -20,6 +21,9 @@ from pathlib import Path
 from hephaestus.codeview import CodeViewer
 from hephaestus.dashboard import snapshot
 from hephaestus.integration import AgentService, AgentTask, Role
+from hephaestus.store.profiles import create_profile as create_profile_record
+from hephaestus.store.profiles import delete_profile as delete_profile_record
+from hephaestus.store.profiles import list_profiles as list_profile_records
 from hephaestus.watch import OKFWatcher
 from hephaestus.workspace import Workspace
 
@@ -59,6 +63,46 @@ class Bridge:
 
     def read_file(self, repo: str, relpath: str) -> dict:
         return self._code.read_file(repo, relpath)
+
+    # Coordinator / profiles
+    def list_profiles(self) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        profiles = list_profile_records(self._app._workspace.state_db_path)
+        return [{**asdict(profile), "status": "idle"} for profile in profiles]
+
+    def create_profile(
+        self,
+        name: str,
+        role: str,
+        rules: list,
+        model=None,
+        effort=None,
+        working_dir=None,
+    ) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        profile = create_profile_record(
+            self._app._workspace.state_db_path,
+            self._app._workspace.root,
+            name=name,
+            role=role,
+            rules=list(rules),
+            model=model,
+            effort=effort,
+            working_dir=working_dir,
+        )
+        return {
+            "agent_id": profile.agent_id,
+            "name": profile.name,
+            "role": profile.role,
+            "status": "idle",
+        }
+
+    def delete_profile(self, agent_id: str) -> None:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        delete_profile_record(self._app._workspace.state_db_path, agent_id)
 
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
     def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
