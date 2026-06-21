@@ -1,0 +1,28 @@
+[project]
+name = "hephaestus"
+version = "0.2.0"
+description = "OKF system manager and agent compliance layer for multi-agent AI development"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+# Desktop shell + Phase 2 surfaces (see spec/architecture.md §8)
+app = ["watchdog>=4", "pywebview>=5", "tomlkit>=0.12"]
+agents = ["claude-agent-sdk>=0.1"]   # Worker uses the external `codex` CLI, not a pip dep
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["hephaestus*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+# Project-local temp dir: this machine's default %TEMP% rejects pytest's basetemp.
+addopts = "--basetemp=.pytest_tmp"

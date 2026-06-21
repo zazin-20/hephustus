@@ -1,0 +1,84 @@
+// Sample snapshot used only when running in a plain browser (no pywebview bridge),
+// so the UI can be developed/previewed with `npm run dev`.
+export const MOCK = {
+  root: 'C:/Users/you/Projects/hephaestus (preview)',
+  issues: [
+    {
+      id: 'issue-001', title: 'Auth module refactor', status: 'done', sprint: 'sprint-01',
+      state: 'DONE',
+      stages: { spec: 'ok', handoff: 'ok', review: 'ok', qa: 'ok', log: 'ok' },
+      violations: [],
+    },
+    {
+      id: 'issue-002', title: 'SQL agent migration', status: 'in-progress', sprint: 'sprint-02',
+      state: 'IN_PROGRESS',
+      stages: { spec: 'ok', handoff: 'none', review: 'none', qa: 'none', log: 'none' },
+      violations: [],
+    },
+    {
+      id: 'issue-010', title: 'API rate limiting', status: 'done', sprint: 'sprint-03',
+      state: 'HANDOFF_PENDING',
+      stages: { spec: 'ok', handoff: 'pending', review: 'none', qa: 'none', log: 'pending' },
+      violations: ['S-002'],
+    },
+    {
+      id: 'issue-012', title: 'Webhook retries', status: 'done', sprint: 'sprint-03',
+      state: 'QA_PENDING',
+      stages: { spec: 'ok', handoff: 'ok', review: 'pending', qa: 'ok', log: 'pending' },
+      violations: ['S-004', 'S-005'],
+    },
+  ],
+  violations: [
+    {
+      rule_id: 'S-002', severity: 'error', issue_id: 'issue-010',
+      message: 'Issue issue-010 is done but has no handoff artifact',
+      artifact: 'agents/architect/issues/issue-010.md',
+      fix_hint: 'Create a handoff at agents/architect/handoffs/<id>.md before the issue is marked done.',
+    },
+    {
+      rule_id: 'S-005', severity: 'error', issue_id: 'issue-012',
+      message: 'Issue issue-012 has QA evidence but its handoff was not reviewed by Architect',
+      artifact: 'agents/architect/handoffs/issue-012.md',
+      fix_hint: "Architect must set 'reviewed_by: architect' on the handoff before QA evidence is created.",
+    },
+    {
+      rule_id: 'S-004', severity: 'warning', issue_id: 'issue-012',
+      message: 'Issue issue-012 is done with QA evidence but has no log entry',
+      artifact: 'agents/log/issue-012.md',
+      fix_hint: 'Add a completion record at agents/log/<id>.md for this issue.',
+    },
+  ],
+  summary: { issues: 4, violations: 3, error: 2, warning: 1, info: 0 },
+}
+
+// Code-viewer preview data (browser mode only).
+export const CODE_MOCK = {
+  repos: [{ name: 'hephaestus', path: '(preview)' }],
+  tree: {
+    '': [
+      { name: 'hephaestus', type: 'dir', path: 'hephaestus' },
+      { name: 'README.md', type: 'file', path: 'README.md' },
+    ],
+    hephaestus: [
+      { name: 'rules', type: 'dir', path: 'hephaestus/rules' },
+      { name: 'models.py', type: 'file', path: 'hephaestus/models.py' },
+    ],
+    'hephaestus/rules': [
+      { name: 'structural.py', type: 'file', path: 'hephaestus/rules/structural.py' },
+    ],
+  },
+  files: {
+    'README.md': {
+      language: 'markdown', size: 42, binary: false, truncated: false,
+      content: '# Hephaestus\n\nOKF system manager and agent compliance layer.',
+    },
+    'hephaestus/models.py': {
+      language: 'python', size: 88, binary: false, truncated: false,
+      content: 'class IssueSpec(OKFModel):\n    id: str\n    status: IssueStatus\n    role: str\n    sprint: str',
+    },
+    'hephaestus/rules/structural.py': {
+      language: 'python', size: 70, binary: false, truncated: false,
+      content: 'class S001WorkerNeedsSpec(HephaestusRule):\n    id = "S-001"\n    severity = Severity.ERROR',
+    },
+  },
+}
