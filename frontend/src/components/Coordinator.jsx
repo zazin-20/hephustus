@@ -3,17 +3,20 @@ import {
   createProfile,
   deleteProfile,
   evaluateSpawn,
+  getCatalog,
   getTrace,
   getTranscript,
   hasBridge,
   listProfiles,
+  listRules,
   listThreads,
   onAgent,
   parseHandoffMarker,
+  pickDirectory,
   sendMessage,
   setTurnIncluded,
 } from '../api.js'
-import { COORDINATOR_MOCK } from '../mock.js'
+import { CATALOG_MOCK, COORDINATOR_MOCK, RULES_MOCK } from '../mock.js'
 
 const INPUT =
   'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
@@ -40,7 +43,7 @@ const TURN_STYLE = {
 const EMPTY_FORM = {
   name: '',
   role: 'architect',
-  rules: '',
+  rules: [],
   model: '',
   effort: '',
   working_dir: '',
@@ -79,13 +82,6 @@ function StatusBadge({ status }) {
   )
 }
 
-function splitRules(value) {
-  return value
-    .split(',')
-    .map((rule) => rule.trim())
-    .filter(Boolean)
-}
-
 function nextMockId(profiles, role) {
   const prefix = role.slice(0, 4)
   const counters = profiles
@@ -108,6 +104,8 @@ export default function Coordinator() {
   const [selectedId, setSelectedId] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [catalog, setCatalog] = useState(CATALOG_MOCK)
+  const [ruleSet, setRuleSet] = useState(RULES_MOCK)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [threads, setThreads] = useState([])
@@ -125,6 +123,10 @@ export default function Coordinator() {
 
   useEffect(() => {
     loadProfiles()
+    if (hasBridge()) {
+      void getCatalog().then((c) => c && setCatalog(c))
+      void listRules().then((r) => r && setRuleSet(r))
+    }
   }, [])
 
   useEffect(() => {
@@ -236,6 +238,31 @@ export default function Coordinator() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function toggleRule(ruleId) {
+    setForm((current) => {
+      const has = current.rules.includes(ruleId)
+      return {
+        ...current,
+        rules: has ? current.rules.filter((r) => r !== ruleId) : [...current.rules, ruleId],
+      }
+    })
+  }
+
+  async function browseDirectory() {
+    if (!hasBridge()) return
+    const chosen = await pickDirectory()
+    if (chosen) updateField('working_dir', chosen)
+  }
+
+  function selectModel(model) {
+    setForm((current) => {
+      const picked = catalog.providers.flatMap((g) => g.models).find((m) => m.id === model)
+      const efforts = picked?.efforts || []
+      const effort = efforts.includes(current.effort) ? current.effort : ''
+      return { ...current, model, effort }
+    })
+  }
+
   async function submit(event) {
     event.preventDefault()
     if (!form.name.trim() || busy) return
@@ -245,9 +272,9 @@ export default function Coordinator() {
     const payload = {
       name: form.name.trim(),
       role: form.role,
-      rules: splitRules(form.rules),
-      model: form.model.trim() || null,
-      effort: form.effort.trim() || null,
+      rules: form.rules,
+      model: form.model || null,
+      effort: form.effort || null,
       working_dir: form.working_dir.trim() || null,
     }
 
@@ -370,6 +397,9 @@ export default function Coordinator() {
     }
   }
 
+  const selectedModel = catalog.providers.flatMap((group) => group.models).find((m) => m.id === form.model)
+  const effortOptions = selectedModel ? selectedModel.efforts || [] : []
+
   const selected = profiles.find((profile) => profile.agent_id === selectedId) || null
 
   return (
@@ -449,36 +479,82 @@ export default function Coordinator() {
                 </select>
               </Field>
               <Field label="Rules">
-                <input
-                  value={form.rules}
-                  onChange={(event) => updateField('rules', event.target.value)}
-                  className={INPUT}
-                  placeholder="S-001, S-002"
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  {ruleSet.map((rule) => {
+                    const on = form.rules.includes(rule.id)
+                    return (
+                      <button
+                        key={rule.id}
+                        type="button"
+                        onClick={() => toggleRule(rule.id)}
+                        title={rule.name}
+                        className={`rounded-full border px-2 py-0.5 font-mono text-[11px] transition ${
+                          on
+                            ? 'border-orange-400/40 bg-orange-500/15 text-orange-200'
+                            : 'border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-slate-200'
+                        }`}
+                      >
+                        {rule.id}
+                      </button>
+                    )
+                  })}
+                </div>
               </Field>
               <Field label="Model">
-                <input
+                <select
                   value={form.model}
-                  onChange={(event) => updateField('model', event.target.value)}
+                  onChange={(event) => selectModel(event.target.value)}
                   className={INPUT}
-                  placeholder="claude-opus, gpt-5, ..."
-                />
+                >
+                  <option value="" className="bg-[#0b0e14]">
+                    (provider default)
+                  </option>
+                  {catalog.providers.map((group) => (
+                    <optgroup key={group.provider} label={group.provider} className="bg-[#0b0e14]">
+                      {group.models.map((model) => (
+                        <option key={model.id} value={model.id} className="bg-[#0b0e14]">
+                          {model.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </Field>
               <Field label="Effort">
-                <input
+                <select
                   value={form.effort}
                   onChange={(event) => updateField('effort', event.target.value)}
-                  className={INPUT}
-                  placeholder="high"
-                />
+                  disabled={!form.model}
+                  className={`${INPUT} disabled:opacity-40`}
+                >
+                  <option value="" className="bg-[#0b0e14]">
+                    {form.model ? '(default)' : 'select a model first'}
+                  </option>
+                  {effortOptions.map((level) => (
+                    <option key={level} value={level} className="bg-[#0b0e14]">
+                      {level}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Working Directory">
-                <input
-                  value={form.working_dir}
-                  onChange={(event) => updateField('working_dir', event.target.value)}
-                  className={INPUT}
-                  placeholder="path/to/repo"
-                />
+                <div className="flex gap-2">
+                  <input
+                    value={form.working_dir}
+                    onChange={(event) => updateField('working_dir', event.target.value)}
+                    className={INPUT}
+                    placeholder="path/to/repo"
+                  />
+                  {hasBridge() ? (
+                    <button
+                      type="button"
+                      onClick={() => void browseDirectory()}
+                      className="shrink-0 rounded-lg border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5"
+                    >
+                      Browse
+                    </button>
+                  ) : null}
+                </div>
               </Field>
               {error ? <div className="text-xs text-rose-300">{error}</div> : null}
               <div className="flex gap-2">

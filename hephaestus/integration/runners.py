@@ -38,6 +38,7 @@ class AgentTask:
     agent_id: str | None = None
     cwd: Path | None = None
     model: str | None = None
+    effort: str | None = None    # reasoning effort (low|medium|high|xhigh|max)
     resume: str | None = None    # prior session id to resume (spec §5.1)
 
 
@@ -68,6 +69,8 @@ class EchoRunner:
 
     async def run(self, task: AgentTask, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
         yield AgentEvent("system", f"[echo:{self.tool.value}] role={task.role.value} issue={task.issue_id}")
+        if task.model or task.effort:
+            yield AgentEvent("system", f"model={task.model} effort={task.effort}")
         if task.resume:
             yield AgentEvent("system", f"resume={task.resume}")
         yield AgentEvent("system", f"context files: {[p.name for p in ctx.files]}")
@@ -102,6 +105,8 @@ def _claude_options(ctx: SessionContext, task: AgentTask):
         kwargs["cwd"] = str(task.cwd)
     if "model" in fields and task.model:
         kwargs["model"] = task.model
+    if "effort" in fields and task.effort:
+        kwargs["effort"] = task.effort
     if "resume" in fields and task.resume:
         kwargs["resume"] = task.resume
     return claude_sdk.ClaudeAgentOptions(**kwargs)
@@ -184,6 +189,9 @@ def build_codex_argv(task: AgentTask, *, output_file: str | None = None, jsonl: 
         argv += ["-C", str(task.cwd)]
     if task.model:
         argv += ["-m", task.model]
+    if task.effort:
+        # `codex exec -c key=value` overrides config.toml; value is parsed as TOML.
+        argv += ["-c", f'model_reasoning_effort="{task.effort}"']
     argv.append(task.prompt)
     return argv
 

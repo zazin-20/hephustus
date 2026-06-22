@@ -83,6 +83,38 @@ export const CODE_MOCK = {
   },
 }
 
+// Catalog + rule set fallbacks for browser-preview mode (no bridge).
+// Effort is carried per-model (Codex per-model from its cache; Claude shares one list).
+const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+export const CATALOG_MOCK = {
+  providers: [
+    {
+      provider: 'claude',
+      models: [
+        { id: 'opus', label: 'Opus (latest)', efforts: CLAUDE_EFFORTS },
+        { id: 'sonnet', label: 'Sonnet (latest)', efforts: CLAUDE_EFFORTS },
+        { id: 'haiku', label: 'Haiku (latest)', efforts: CLAUDE_EFFORTS },
+        { id: 'fable', label: 'Fable (latest)', efforts: CLAUDE_EFFORTS },
+      ],
+    },
+    {
+      provider: 'codex',
+      models: [{ id: 'gpt-5.4', label: 'GPT-5.4', efforts: ['low', 'medium', 'high', 'xhigh'] }],
+    },
+  ],
+}
+
+export const RULES_MOCK = [
+  { id: 'S-001', name: 'Worker must have issue spec before starting', severity: 'error', fix_hint: '' },
+  { id: 'S-002', name: 'Worker must leave handoff after completing', severity: 'error', fix_hint: '' },
+  { id: 'S-003', name: 'QA must produce evidence before issue logged as done', severity: 'error', fix_hint: '' },
+  { id: 'S-004', name: 'Log entry must exist for every completed issue', severity: 'warning', fix_hint: '' },
+  { id: 'S-005', name: 'Handoff must have Architect review before QA starts', severity: 'error', fix_hint: '' },
+  { id: 'S-006', name: 'Sprint state must be consistent (index vs log)', severity: 'warning', fix_hint: '' },
+  { id: 'G-001', name: 'Agent must not write outside its allowed paths', severity: 'error', fix_hint: '' },
+  { id: 'G-002', name: 'Run must use the contracted model', severity: 'error', fix_hint: '' },
+]
+
 export const COORDINATOR_MOCK = [
   {
     agent_id: 'arch-001',

@@ -212,6 +212,7 @@ class AgentService:
             role=task.role.value,
             rules=[],
             model=task.model,
+            effort=task.effort,
             working_dir=str(task.cwd) if task.cwd else None,
         )
 
@@ -222,7 +223,7 @@ class AgentService:
             "tool": tool.value,
             "issue_id": task.issue_id,
             "model": task.model or profile.model,
-            "effort": profile.effort,
+            "effort": task.effort or profile.effort,
             "cwd": str(task.cwd) if task.cwd else profile.working_dir,
         }
 
@@ -239,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", default=".", help="OKF root (containing agents/)")
     p.add_argument("--cwd", help="working directory for the agent")
     p.add_argument("--model", help="override model")
+    p.add_argument("--effort", help="reasoning effort (low|medium|high|xhigh|max)")
     p.add_argument("--echo", action="store_true", help="dry-run: print routing + context, no live call")
     args = p.parse_args(argv)
 
@@ -253,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         issue_id=args.issue,
         cwd=Path(args.cwd) if args.cwd else None,
         model=args.model,
+        effort=args.effort,
     )
     tool, ctx = service.resolve(task)
     print(f"-> role={task.role.value}  tool={tool.value}  context={[p.name for p in ctx.files]}")

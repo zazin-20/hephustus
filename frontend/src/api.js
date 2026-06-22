@@ -67,6 +67,22 @@ export async function sendMessage(agentId, prompt, issueId, model) {
   return null
 }
 
+// --- Coordinator / catalog + rules ---
+export async function getCatalog() {
+  if (window.pywebview?.api?.get_catalog) return await window.pywebview.api.get_catalog()
+  return null
+}
+
+export async function listRules() {
+  if (window.pywebview?.api?.list_rules) return await window.pywebview.api.list_rules()
+  return null
+}
+
+export async function pickDirectory() {
+  if (window.pywebview?.api?.pick_directory) return await window.pywebview.api.pick_directory()
+  return null
+}
+
 // --- Coordinator / profiles ---
 export async function listProfiles() {
   if (window.pywebview?.api?.list_profiles) return await window.pywebview.api.list_profiles()

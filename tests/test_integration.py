@@ -67,6 +67,26 @@ def test_build_codex_argv():
     assert argv[-1] == "implement it"
 
 
+def test_build_codex_argv_passes_effort_via_config():
+    task = AgentTask(role=Role.WORKER, prompt="go", model="gpt-5.4", effort="high")
+    argv = build_codex_argv(task)
+    assert argv[argv.index("-c") + 1] == 'model_reasoning_effort="high"'
+
+
+def test_build_codex_argv_omits_effort_when_unset():
+    argv = build_codex_argv(AgentTask(role=Role.WORKER, prompt="go", model="gpt-5.4"))
+    assert "-c" not in argv
+
+
+def test_claude_options_pass_effort():
+    pytest.importorskip("claude_agent_sdk")
+    from hephaestus.integration.runners import _claude_options
+
+    ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[], system_prompt="")
+    opts = _claude_options(ctx, AgentTask(role=Role.ARCHITECT, prompt="x", effort="xhigh"))
+    assert getattr(opts, "effort", None) == "xhigh"
+
+
 def test_service_routes_worker_through_codex_echo():
     async def run():
         runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}

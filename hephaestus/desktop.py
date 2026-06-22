@@ -57,6 +57,33 @@ class Bridge:
     def rescan(self) -> dict:
         return snapshot(self._root)
 
+    # Catalog (model/effort) + rule set — feed the Coordinator form dropdowns
+    def get_catalog(self) -> dict:
+        from hephaestus.catalog import catalog
+        return catalog()
+
+    def list_rules(self) -> list[dict]:
+        from hephaestus.rules.governance import ALL_GOVERNANCE_RULES
+        from hephaestus.rules.structural import ALL_STRUCTURAL_RULES
+        return [
+            {
+                "id": rule.id,
+                "name": rule.name,
+                "severity": getattr(rule.severity, "value", str(rule.severity)),
+                "fix_hint": rule.fix_hint,
+            }
+            for rule in (*ALL_STRUCTURAL_RULES, *ALL_GOVERNANCE_RULES)
+        ]
+
+    def pick_directory(self) -> str | None:
+        """Open the native folder picker; return the chosen path or null."""
+        if self._app is None or self._app._window is None or webview is None:
+            return None
+        result = self._app._window.create_file_dialog(webview.FOLDER_DIALOG)
+        if not result:
+            return None
+        return result[0] if isinstance(result, (list, tuple)) else str(result)
+
     # Code viewer (read-only)
     def list_repos(self) -> list[dict]:
         return self._code.list_repos()
@@ -190,10 +217,10 @@ class Bridge:
         )]
 
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
-    def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
+    def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None, effort=None) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        return self._app.start_agent(role, prompt, issue_id, cwd, model)
+        return self._app.start_agent(role, prompt, issue_id, cwd, model, effort)
 
 
 class DesktopApp:
@@ -231,7 +258,7 @@ class DesktopApp:
         loop.run_forever()
 
     # --- Agents (§5): run on the core loop, stream events to the UI ---
-    def start_agent(self, role, prompt, issue_id=None, cwd=None, model=None) -> dict:
+    def start_agent(self, role, prompt, issue_id=None, cwd=None, model=None, effort=None) -> dict:
         if self._loop is None:
             raise RuntimeError("core loop not started yet")
         task = AgentTask(
@@ -240,6 +267,7 @@ class DesktopApp:
             issue_id=issue_id or None,
             cwd=Path(cwd) if cwd else None,
             model=model or None,
+            effort=effort or None,
         )
         return self._start_task(task)
 
@@ -254,6 +282,7 @@ class DesktopApp:
             agent_id=agent_id,
             cwd=Path(profile.working_dir) if profile.working_dir else None,
             model=model or profile.model,
+            effort=profile.effort,
         )
         return self._start_task(task)
 
