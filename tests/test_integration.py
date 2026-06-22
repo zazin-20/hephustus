@@ -182,6 +182,44 @@ def test_codex_event_maps_reasoning_to_thinking():
     assert ev.text == "let me think"
 
 
+def test_codex_event_captures_command_execution_as_tool_call():
+    """Real codex exec --json reports shell tool calls as command_execution items."""
+    from hephaestus.integration.runners import _codex_event, _extract_target_path
+
+    raw = {
+        "type": "item.completed",
+        "item": {"type": "command_execution", "command": "echo hi", "exit_code": 0},
+    }
+    ev = _codex_event(raw)
+    assert ev.kind == "tool_call"
+    assert ev.raw["action"] == "shell"
+    assert _extract_target_path(ev.raw["input"]) == "echo hi"
+
+
+def test_codex_event_function_call_parses_string_arguments():
+    from hephaestus.integration.runners import _codex_event
+
+    raw = {
+        "type": "item.completed",
+        "item": {"type": "function_call", "name": "search", "arguments": '{"query": "x"}'},
+    }
+    ev = _codex_event(raw)
+    assert ev.kind == "tool_call"
+    assert ev.raw == {"action": "search", "input": {"query": "x"}}
+
+
+def test_codex_event_ignores_item_started_to_avoid_duplicate_tool_calls():
+    """item.started carries the same item; only item.completed should emit a tool_call."""
+    from hephaestus.integration.runners import _codex_event
+
+    raw = {
+        "type": "item.started",
+        "item": {"type": "command_execution", "command": "echo hi", "status": "in_progress"},
+    }
+    ev = _codex_event(raw)
+    assert ev.kind != "tool_call"
+
+
 def test_claude_options_pass_effort():
     pytest.importorskip("claude_agent_sdk")
     from hephaestus.integration.runners import _claude_options

@@ -234,34 +234,55 @@ def _extract_target_path(input_dict: dict) -> str | None:
     return None
 
 
+def _codex_args(arguments) -> dict:
+    """Normalize a codex item's arguments (dict, JSON string, or None) to a dict."""
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        try:
+            value = json.loads(arguments)
+        except json.JSONDecodeError:
+            return {"arguments": arguments}
+        return value if isinstance(value, dict) else {"arguments": value}
+    return {}
+
+
 def _codex_event(raw: dict) -> AgentEvent:
     """Map a `codex exec --json` JSONL event to an AgentEvent.
 
-    Observed schema (codex-cli 0.130.0):
-      {"type":"thread.started","thread_id":...}
-      {"type":"turn.started"}
+    Observed schema (codex-cli 0.130.0) — tool calls arrive as items, reported on
+    both `item.started` and `item.completed`; we act on completion so each is
+    emitted once:
+      {"type":"thread.started",...} / {"type":"turn.started"}
       {"type":"item.completed","item":{"type":"agent_message","text":"..."}}
-      {"type":"item.completed","item":{"type":"function_call","name":"shell","arguments":{...}}}
+      {"type":"item.completed","item":{"type":"command_execution","command":"...","exit_code":0}}
+      {"type":"item.completed","item":{"type":"function_call","name":"...","arguments":"{...}"}}
       {"type":"turn.completed","usage":{...}}
     """
     raw_kind = raw.get("type") or raw.get("kind") or "event"
     item = raw.get("item") if isinstance(raw.get("item"), dict) else None
     msg = raw.get("msg") if isinstance(raw.get("msg"), dict) else None
 
-    # function_call items → tool_call events
-    if item and item.get("type") == "function_call":
-        name = item.get("name", "")
-        arguments = item.get("arguments") or {}
-        return AgentEvent(
-            kind="tool_call",
-            text=name,
-            raw={"action": name, "input": arguments},
-        )
-
-    # reasoning items → thinking events (agent reasoning; never drop it)
-    if item and item.get("type") in ("reasoning", "agent_reasoning"):
-        th = item.get("text") or item.get("summary") or item.get("content") or ""
-        return AgentEvent(kind="thinking", text=str(th), raw=raw)
+    # Tool calls + reasoning are reported as items; act on completion (item.started
+    # carries the same item and would double-emit otherwise).
+    if item is not None and raw_kind == "item.completed":
+        itype = item.get("type")
+        if itype == "command_execution":
+            command = item.get("command", "")
+            return AgentEvent("tool_call", "shell", raw={"action": "shell", "input": {"command": command}})
+        if itype == "function_call":
+            name = item.get("name", "") or "function"
+            return AgentEvent("tool_call", name, raw={"action": name, "input": _codex_args(item.get("arguments"))})
+        if itype in ("mcp_tool_call", "tool_call"):
+            name = str(item.get("name") or item.get("tool") or "tool")
+            args = _codex_args(item.get("arguments") if item.get("arguments") is not None else item.get("input"))
+            return AgentEvent("tool_call", name, raw={"action": name, "input": args})
+        if itype in ("file_change", "patch_apply", "apply_patch"):
+            return AgentEvent("tool_call", itype, raw={"action": itype, "input": {"path": item.get("path", "")}})
+        if itype in ("reasoning", "agent_reasoning"):
+            th = item.get("text") or item.get("summary") or item.get("content") or ""
+            return AgentEvent("thinking", str(th), raw=raw)
+        # agent_message and anything else fall through to the text path below.
 
     text = raw.get("text") or raw.get("message") or raw.get("delta") or ""
     if not text and item:

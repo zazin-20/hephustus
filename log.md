@@ -437,3 +437,24 @@ line at 64 KB and raises when codex emits a longer JSONL line (big agent message
 reasoning blob, or file read). Fixed by reading raw 64 KB chunks and splitting on
 newlines ourselves (`read()` has no per-line cap), via a `_decode_codex_line`
 helper. **Tests:** 151 passing — added oversized-line (200 KB) + blank-line decode.
+
+---
+
+## 2026-06-23 — Fix: Codex tool calls not captured in Trace
+
+**Type:** Bugfix
+**Author:** Human + Claude
+
+Codex tool calls never showed up in the Trace bucket. `_codex_event` only matched
+`item.type == "function_call"`, but a live `codex exec --json` probe (codex-cli
+0.130.0) showed real shell tool calls arrive as **`command_execution`** items
+(`{command, exit_code, status}`) — so every shell call fell through to the text
+path and was dropped from the trace.
+
+Rewrote the item mapping to emit a `tool_call` for `command_execution` (action
+`shell`, command surfaced as the target path), plus `function_call`,
+`mcp_tool_call`, and `file_change`/`patch_apply` items — and to act only on
+`item.completed` (tool items appear on both `item.started` and `item.completed`,
+which would otherwise double-emit). Added `_codex_args` to normalize string-encoded
+arguments. **Tests:** 154 passing — command_execution → tool_call, string-arg
+function_call, and item.started de-dup.
