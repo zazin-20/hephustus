@@ -21,7 +21,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from hephaestus.integration.routing import Tool
+# Provider keys mirror hephaestus.integration.routing.Tool values. Kept as plain
+# literals here so this module doesn't import the integration package (which would
+# create an import cycle: catalog -> integration -> service -> catalog).
+_CLAUDE = "claude"
+_CODEX = "codex"
 
 _CODEX_CACHE = Path.home() / ".codex" / "models_cache.json"
 
@@ -62,7 +66,7 @@ def discover_claude() -> dict:
         {"id": alias, "label": label, "efforts": list(efforts)}
         for alias, label in _CLAUDE_ALIASES
     ]
-    return {"provider": Tool.CLAUDE.value, "models": models}
+    return {"provider": _CLAUDE, "models": models}
 
 
 def discover_codex() -> dict:
@@ -85,12 +89,37 @@ def discover_codex() -> dict:
                 }
             )
         if models:
-            return {"provider": Tool.CODEX.value, "models": models}
+            return {"provider": _CODEX, "models": models}
     except Exception:
         pass
-    return {"provider": Tool.CODEX.value, "models": list(_CODEX_MODEL_FALLBACK)}
+    return {"provider": _CODEX, "models": list(_CODEX_MODEL_FALLBACK)}
 
 
 def catalog() -> dict:
     """Serializable catalog for the bridge: providers -> models -> per-model efforts."""
     return {"providers": [discover_claude(), discover_codex()]}
+
+
+_CLAUDE_ALIAS_IDS = {alias for alias, _ in _CLAUDE_ALIASES}
+
+
+def provider_for_model(model: str | None) -> str | None:
+    """Resolve a model id to its provider (a Tool value), or None if unknown.
+
+    Used for routing: the chosen model decides the runner, not just the role.
+    Cheap — no subprocess; checks the Claude aliases, then the codex cache slugs,
+    then a name heuristic as a fallback.
+    """
+    if not model:
+        return None
+    if model in _CLAUDE_ALIAS_IDS or model.startswith("claude"):
+        return _CLAUDE
+    try:
+        data = json.loads(_CODEX_CACHE.read_text(encoding="utf-8"))
+        if any(m.get("slug") == model for m in data.get("models", [])):
+            return _CODEX
+    except Exception:
+        pass
+    if model.startswith(("gpt", "o1", "o3", "o4", "codex")):
+        return _CODEX
+    return None

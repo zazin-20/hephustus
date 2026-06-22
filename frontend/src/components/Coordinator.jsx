@@ -34,12 +34,6 @@ const STATUS_STYLE = {
   idle: 'bg-slate-500/15 text-slate-300 ring-white/10',
 }
 
-const TURN_STYLE = {
-  user: 'border-orange-500/20 bg-orange-500/10 text-orange-100',
-  assistant: 'border-white/10 bg-black/20 text-slate-200',
-  tool: 'border-sky-500/20 bg-sky-500/10 text-sky-100',
-}
-
 const EMPTY_FORM = {
   name: '',
   role: 'architect',
@@ -93,11 +87,37 @@ function nextMockId(profiles, role) {
   return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
-function renderTurnRole(turn) {
+function lineLabel(turn) {
   if (turn.role === 'user') return 'user'
-  if (turn.role === 'tool') return 'tool'
-  return 'assistant'
+  if (turn.kind === 'thinking') return 'think'
+  if (turn.kind === 'error') return 'err'
+  return 'agent'
 }
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* fall through to the execCommand path (webviews without async clipboard) */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 
 export default function Coordinator() {
   const [profiles, setProfiles] = useState([])
@@ -116,6 +136,7 @@ export default function Coordinator() {
   const [sending, setSending] = useState(false)
   const [traceEvents, setTraceEvents] = useState([])
   const [showTrace, setShowTrace] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [spawnCard, setSpawnCard] = useState(null)
   const activeRunId = useRef(null)
   const activeAgentId = useRef(null)
@@ -252,6 +273,20 @@ export default function Coordinator() {
     if (!hasBridge()) return
     const chosen = await pickDirectory()
     if (chosen) updateField('working_dir', chosen)
+  }
+
+  async function copyConversation() {
+    const text = conversationLines
+      .map((turn) => {
+        const body = (turn.text || '').trim() || `[${turn.kind || 'event'}]`
+        return `${lineLabel(turn)}: ${body}`
+      })
+      .join('\n')
+    if (!text) return
+    if (await copyToClipboard(text)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
   }
 
   function selectModel(model) {
@@ -399,6 +434,16 @@ export default function Coordinator() {
 
   const selectedModel = catalog.providers.flatMap((group) => group.models).find((m) => m.id === form.model)
   const effortOptions = selectedModel ? selectedModel.efforts || [] : []
+
+  // Flat conversation: user prompts + agent content (text/thinking/error) only.
+  // Tool calls live in the Trace bucket; lifecycle envelopes (system/result) and
+  // empty turns are dropped — they carry no content (the real reasoning is `thinking`).
+  const conversationLines = transcript.filter((t) => {
+    if (t.role === 'user') return (t.text || '').trim()
+    if (t.role === 'tool' || t.kind === 'tool_call' || t.kind === 'tool') return false
+    if (!['text', 'thinking', 'error'].includes(t.kind)) return false
+    return (t.text || '').trim()
+  })
 
   const selected = profiles.find((profile) => profile.agent_id === selectedId) || null
 
@@ -625,39 +670,60 @@ export default function Coordinator() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden rounded-2xl border border-white/5 bg-black/20">
-              <div className="border-b border-white/5 px-4 py-3 text-sm font-semibold text-slate-200">
-                Conversation
+            <div className="flex-1 overflow-hidden rounded-2xl border border-white/5 bg-black/40">
+              <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-200">Conversation</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-600">tool calls → Trace</span>
+                  <button
+                    type="button"
+                    onClick={() => void copyConversation()}
+                    disabled={!conversationLines.length}
+                    className="rounded border border-white/10 px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:border-white/20 hover:text-slate-200 disabled:opacity-40"
+                  >
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
               </div>
-              <div className="max-h-[48vh] space-y-3 overflow-auto p-4">
-                {transcript.length ? (
-                  transcript.map((turn) => {
+              <div className="max-h-[48vh] overflow-auto p-4 font-mono text-[13px] leading-relaxed">
+                {conversationLines.length ? (
+                  conversationLines.map((turn) => {
                     const excluded = turn.included === false
-                    const tone = TURN_STYLE[renderTurnRole(turn)] || TURN_STYLE.assistant
+                    const isUser = turn.role === 'user'
+                    const isThinking = turn.kind === 'thinking'
+                    const isError = turn.kind === 'error'
+                    const label = lineLabel(turn)
+                    const labelTone = isUser
+                      ? 'text-orange-500/70'
+                      : isThinking
+                        ? 'text-violet-500/60'
+                        : isError
+                          ? 'text-rose-500/70'
+                          : 'text-emerald-500/70'
+                    const textTone = isUser
+                      ? 'text-orange-200'
+                      : isThinking
+                        ? 'text-slate-500 italic'
+                        : isError
+                          ? 'text-rose-300'
+                          : 'text-slate-200'
                     return (
-                      <div
-                        key={turn.id}
-                        className={`rounded-xl border p-3 transition-opacity ${tone} ${excluded ? 'opacity-40' : ''}`}
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-slate-400">
-                          <span>{renderTurnRole(turn)}</span>
-                          <div className="flex items-center gap-2">
-                            <span>{turn.kind || 'text'}</span>
-                            <button
-                              type="button"
-                              onClick={() => void toggleTurn(turn)}
-                              className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:border-white/20 hover:text-slate-300"
-                            >
-                              {excluded ? 'Include' : 'Exclude'}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed">{turn.text}</div>
+                      <div key={turn.id} className={`group flex gap-3 py-0.5 ${excluded ? 'opacity-30' : ''}`}>
+                        <span className={`w-12 shrink-0 select-none text-right ${labelTone}`}>{label}</span>
+                        <span className={`flex-1 whitespace-pre-wrap break-words ${textTone}`}>{turn.text}</span>
+                        <button
+                          type="button"
+                          onClick={() => void toggleTurn(turn)}
+                          title={excluded ? 'include in context' : 'exclude from context'}
+                          className="shrink-0 select-none text-[11px] text-slate-700 opacity-0 transition group-hover:opacity-100 hover:text-slate-300"
+                        >
+                          {excluded ? '+' : '×'}
+                        </button>
                       </div>
                     )
                   })
                 ) : (
-                  <div className="grid min-h-[220px] place-items-center text-center text-sm text-slate-500">
+                  <div className="grid min-h-[220px] place-items-center text-center text-slate-600">
                     Open a profile thread or send the first message to start one.
                   </div>
                 )}

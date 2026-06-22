@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import AsyncIterator
 
+from hephaestus.catalog import provider_for_model
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.routing import Role, Tool, tool_for
 from hephaestus.integration.runners import (
@@ -91,7 +92,10 @@ class AgentService:
         interrupt_running_runs(self.state_db_path)
 
     def resolve(self, task: AgentTask) -> tuple[Tool, SessionContext]:
-        tool = tool_for(task.role)
+        # The chosen model decides the provider/runner; fall back to role routing
+        # only when no model is set. (Picking gpt-5.4 must go to Codex, not Claude.)
+        provider = provider_for_model(task.model)
+        tool = Tool(provider) if provider is not None else tool_for(task.role)
         ctx = build_session_context(self.root, task.role, task.issue_id)
         return tool, ctx
 
@@ -161,14 +165,18 @@ class AgentService:
                     if event.kind == "result" and event.raw:
                         usage = event.raw.get("usage")
 
-                    append_turn(
-                        self.state_db_path,
-                        prepared.thread_id,
-                        run_id=prepared.run_id,
-                        role="tool" if event.kind in ("tool", "tool_call") else "assistant",
-                        kind=event.kind,
-                        text=event.text,
-                    )
+                    # Persist content (text/thinking/error) and tool calls; skip empty
+                    # lifecycle envelopes (system/result) so they don't pollute the
+                    # transcript or the compiled context fed to the next run.
+                    if event.text.strip() or event.kind in ("tool", "tool_call"):
+                        append_turn(
+                            self.state_db_path,
+                            prepared.thread_id,
+                            run_id=prepared.run_id,
+                            role="tool" if event.kind in ("tool", "tool_call") else "assistant",
+                            kind=event.kind,
+                            text=event.text,
+                        )
                     if event.kind == "tool_call" and event.raw:
                         append_trace_event(
                             self.state_db_path,

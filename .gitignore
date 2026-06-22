@@ -14,6 +14,7 @@ dist/
 # Tooling
 .pytest_cache/
 .pytest_tmp/
+tmp_pytest/
 .ruff_cache/
 .mypy_cache/
 
@@ -22,3 +23,6 @@ dist/
 
 # Operational store (per-workspace SQLite) — never versioned
 .hephaestus/
+
+# Runtime-generated identity cards (created on profile create, removed on delete)
+agents/identities/

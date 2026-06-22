@@ -1,6 +1,6 @@
 ---
 title: Hephaestus System Log
-updated: 2026-06-21
+updated: 2026-06-22
 ---
 
 # Hephaestus System Log
@@ -347,3 +347,78 @@ with echo runners and asserts events (incl. terminal `done`) reach a fake window
 gaps: **OKF Editor** (write-path) and **Correction Box** (capture).
 
 **Next step:** OKF Editor write-path, then Correction Box — completing Phase 1.
+
+---
+
+## 2026-06-22 — Cascade Profile Delete + OKF Scaffold on Boot
+
+**Type:** Implementation
+**Author:** Human + Claude
+
+- `delete_profile` now **cascades**: removes the agent's `trace_events`, `turns`,
+  `runs`, `threads`, and its `agents/identities/<id>.json` card before dropping the
+  profile row (previously it left orphaned runtime rows behind).
+- `Workspace.open()` calls `scaffold_okf()` — on first boot it creates the `agents/`
+  OKF tree (architect issues+handoffs, qa/evidence, log, identities, archive), seeds
+  `issues/index.md`, and adds `.hephaestus/` to `.gitignore`.
+
+**Commit:** 58f4ba3. **Tests:** cascade-delete coverage added.
+
+---
+
+## 2026-06-22 — Provider-Sourced Model/Effort Catalog + Effort Plumbing
+
+**Type:** Implementation
+**Author:** Human + Claude
+
+Replaced the hardcoded Coordinator model list with **provider discovery** and made
+the form's dropdowns real:
+
+- **Codex models** come from the codex CLI's own `~/.codex/models_cache.json` (it
+  refreshes the file itself), with per-model reasoning levels.
+- **Claude models** are the stable aliases (opus/sonnet/haiku/fable) — the server
+  resolves each to the latest, so no API key and never stale; the effort enum is
+  parsed from `claude --help`.
+- **Effort is per-model**: the effort dropdown derives from the selected model
+  (Codex per-model; Claude one flat list).
+- **Effort now reaches the runners** (it was stored but ignored): `AgentTask.effort`
+  → Claude SDK `ClaudeAgentOptions.effort` and Codex `-c model_reasoning_effort=…`,
+  recorded in the `ExecutionContract`; the profile path passes `profile.effort`.
+
+**Decisions:** the model picker shows all models grouped by provider (not
+role-filtered); the catalog must be provider-sourced, never hardcoded.
+
+**Commit:** d9cdf0f. **Tests:** catalog discovery + effort plumbing.
+
+---
+
+## 2026-06-22 — Coordinator Observability + Model-Provider Routing
+
+**Type:** Implementation
+**Author:** Human + Claude
+
+Reworked the Coordinator conversation into a docker-exec-style view and fixed two
+real data-loss / routing bugs:
+
+- **Flat transcript** (monospace, line-based) instead of per-message cards:
+  user / agent / thinking / error distinguished by colour; tool calls stay in the
+  Trace bucket. Added a **Copy** button (clipboard API + `execCommand` fallback)
+  with selectable text.
+- **Thinking blocks were being dropped** — `_claude_event` now captures them as
+  `thinking` events (and Codex `reasoning` items likewise), so the agent's reasoning
+  is visible instead of silently lost.
+- **`sys` noise + duplicate reply fixed**: lifecycle envelopes (SystemMessage /
+  ResultMessage) no longer echo `msg.result` (which duplicated the whole answer),
+  and empty lifecycle turns are no longer persisted — keeping both the transcript
+  and the compiled context clean.
+- **Routing now follows the chosen model's provider** (`catalog.provider_for_model`
+  used in `AgentService.resolve`), not just role. Picking a Codex model on a
+  non-worker profile routes to Codex instead of erroring on Claude; it falls back to
+  role-based routing only when no model is set. This evolves the original static
+  role-based routing (see the 2026-06-21 entries).
+
+**Tests:** 149 passing — added thinking capture (Claude + Codex), skip-empty
+lifecycle turns, model-provider routing, and provider classification.
+
+**Housekeeping:** gitignored runtime identity cards (`agents/identities/`) and the
+stray `tmp_pytest/` scratch dir.

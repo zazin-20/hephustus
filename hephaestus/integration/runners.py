@@ -121,6 +121,7 @@ def _claude_event(msg) -> AgentEvent | list[AgentEvent]:
     """
     name = type(msg).__name__
     text_parts = []
+    thinking_parts = []
     tool_events: list[AgentEvent] = []
 
     content = getattr(msg, "content", None)
@@ -137,6 +138,11 @@ def _claude_event(msg) -> AgentEvent | list[AgentEvent]:
                         text=tool_name,
                         raw={"action": tool_name, "input": tool_input},
                     ))
+            # ThinkingBlock — agent reasoning. Capture it; never drop it.
+            elif block_type in ("thinking", "ThinkingBlock") or hasattr(block, "thinking"):
+                th = getattr(block, "thinking", None)
+                if th:
+                    thinking_parts.append(th)
             else:
                 t = getattr(block, "text", None)
                 if t:
@@ -144,18 +150,29 @@ def _claude_event(msg) -> AgentEvent | list[AgentEvent]:
     elif isinstance(content, str):
         text_parts.append(content)
 
-    if tool_events:
-        # If there are tool events alongside text, emit text first then tools.
-        events: list[AgentEvent] = []
-        if text_parts:
-            events.append(AgentEvent(kind="text", text="".join(text_parts)))
-        events.extend(tool_events)
-        return events
+    # Emit thinking first, then text, then tool calls — preserving everything.
+    events: list[AgentEvent] = []
+    if thinking_parts:
+        events.append(AgentEvent(kind="thinking", text="".join(thinking_parts)))
+    if text_parts:
+        events.append(AgentEvent(kind="text", text="".join(text_parts)))
+    events.extend(tool_events)
+    if events:
+        return events if len(events) > 1 else events[0]
 
+    # No content blocks: a lifecycle envelope (system init / result). Carry
+    # session_id + usage in raw, but NOT msg.result as text — the spoken reply
+    # already arrived via AssistantMessage events, so echoing it here duplicated
+    # the whole response as a stray "result" turn.
     kind = {"AssistantMessage": "text", "ResultMessage": "result"}.get(name, "system")
+    raw = {}
     sid = getattr(msg, "session_id", None)
-    raw = {"session_id": sid} if sid else None
-    return AgentEvent(kind=kind, text="".join(text_parts) or getattr(msg, "result", ""), raw=raw)
+    if sid:
+        raw["session_id"] = sid
+    usage = getattr(msg, "usage", None)
+    if usage is not None:
+        raw["usage"] = usage
+    return AgentEvent(kind=kind, text="", raw=raw or None)
 
 
 class ClaudeRunner:
@@ -240,6 +257,11 @@ def _codex_event(raw: dict) -> AgentEvent:
             text=name,
             raw={"action": name, "input": arguments},
         )
+
+    # reasoning items → thinking events (agent reasoning; never drop it)
+    if item and item.get("type") in ("reasoning", "agent_reasoning"):
+        th = item.get("text") or item.get("summary") or item.get("content") or ""
+        return AgentEvent(kind="thinking", text=str(th), raw=raw)
 
     text = raw.get("text") or raw.get("message") or raw.get("delta") or ""
     if not text and item:

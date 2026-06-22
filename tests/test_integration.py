@@ -78,6 +78,92 @@ def test_build_codex_argv_omits_effort_when_unset():
     assert "-c" not in argv
 
 
+def test_resolve_routes_by_model_provider(tmp_path):
+    """The chosen model decides the runner, overriding role-based routing."""
+    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    service = AgentService(tmp_path, runners=runners)
+
+    # architect normally -> Claude, but a Codex model forces Codex
+    tool, _ = service.resolve(AgentTask(role=Role.ARCHITECT, prompt="x", model="gpt-5.4"))
+    assert tool == Tool.CODEX
+    # worker normally -> Codex, but a Claude alias forces Claude
+    tool2, _ = service.resolve(AgentTask(role=Role.WORKER, prompt="x", model="opus"))
+    assert tool2 == Tool.CLAUDE
+    # no model -> role default
+    assert service.resolve(AgentTask(role=Role.ARCHITECT, prompt="x"))[0] == Tool.CLAUDE
+    assert service.resolve(AgentTask(role=Role.WORKER, prompt="x"))[0] == Tool.CODEX
+
+
+def test_provider_for_model_classifies():
+    from hephaestus.catalog import provider_for_model
+
+    assert provider_for_model("opus") == Tool.CLAUDE.value
+    assert provider_for_model("claude-opus-4-8") == Tool.CLAUDE.value
+    assert provider_for_model("gpt-5.4") == Tool.CODEX.value
+    assert provider_for_model(None) is None
+    assert provider_for_model("some-unknown-model") is None
+
+
+def test_service_skips_empty_lifecycle_turns(tmp_path):
+    """Empty system/result envelopes must not be persisted — only real content."""
+    from hephaestus.store.threads import list_turns
+
+    class _LifecycleRunner:
+        tool = Tool.CLAUDE
+
+        async def run(self, task, ctx):
+            yield AgentEvent("system", "")       # lifecycle noise -> dropped
+            yield AgentEvent("result", "")       # lifecycle noise -> dropped
+            yield AgentEvent("thinking", "weighing it")
+            yield AgentEvent("text", "the answer")
+
+    async def go():
+        runners = {Tool.CLAUDE: _LifecycleRunner(), Tool.CODEX: _LifecycleRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="hi", issue_id="issue-001"))
+        async for _ in service.run(prepared):
+            pass
+        return list_turns(service.state_db_path, prepared.thread_id)
+
+    turns = asyncio.run(go())
+    kinds = {(t.role, t.kind, t.text) for t in turns}
+    assert ("user", "text", "hi") in kinds
+    assert ("assistant", "thinking", "weighing it") in kinds
+    assert ("assistant", "text", "the answer") in kinds
+    assert all(t.text.strip() for t in turns)  # no empty lifecycle rows
+
+
+def test_claude_event_captures_thinking_and_text():
+    """Agent reasoning (thinking blocks) must not be dropped — it's surfaced as a
+    'thinking' event alongside the spoken text."""
+    from hephaestus.integration.runners import _claude_event
+
+    class _Blk:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    class AssistantMessage:  # name drives kind mapping
+        pass
+
+    msg = AssistantMessage()
+    msg.content = [
+        _Blk(type="thinking", thinking="weighing the options"),
+        _Blk(type="text", text="here is my answer"),
+    ]
+    result = _claude_event(msg)
+    by_kind = {e.kind: e.text for e in (result if isinstance(result, list) else [result])}
+    assert by_kind.get("thinking") == "weighing the options"
+    assert by_kind.get("text") == "here is my answer"
+
+
+def test_codex_event_maps_reasoning_to_thinking():
+    from hephaestus.integration.runners import _codex_event
+
+    ev = _codex_event({"type": "item.completed", "item": {"type": "reasoning", "text": "let me think"}})
+    assert ev.kind == "thinking"
+    assert ev.text == "let me think"
+
+
 def test_claude_options_pass_effort():
     pytest.importorskip("claude_agent_sdk")
     from hephaestus.integration.runners import _claude_options
