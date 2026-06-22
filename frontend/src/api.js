@@ -118,3 +118,16 @@ export async function evaluateSpawn(role, task, issueId) {
     return await window.pywebview.api.evaluate_spawn(role, task, issueId)
   return null
 }
+
+// --- Corrections ---
+export async function saveCorrection(violationId, agentId, issueId, note) {
+  if (window.pywebview?.api?.save_correction)
+    return await window.pywebview.api.save_correction(violationId, agentId, issueId, note)
+  return null
+}
+
+export async function getCorrections(agentId, issueId) {
+  if (window.pywebview?.api?.get_corrections)
+    return await window.pywebview.api.get_corrections(agentId || null, issueId || null)
+  return []
+}

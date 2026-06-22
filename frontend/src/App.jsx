@@ -1,41 +1,48 @@
-import { useEffect, useState } from 'react'
-import Dashboard from './components/Dashboard.jsx'
-import Violations from './components/Violations.jsx'
+import { useEffect, useRef, useState } from 'react'
 import CodeView from './components/CodeView.jsx'
 import RunAgent from './components/RunAgent.jsx'
 import Coordinator from './components/Coordinator.jsx'
-import { StatCard } from './components/ui.jsx'
-import { onPush, whenReady, getState, rescan, hasBridge } from './api.js'
+import { ToastProvider, useToast } from './components/Toast.jsx'
+import { onPush, whenReady, getState, hasBridge } from './api.js'
 import { MOCK } from './mock.js'
 
-export default function App() {
+function AppInner() {
   const [snap, setSnap] = useState(null)
   const [live, setLive] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [view, setView] = useState('compliance')
+  const [view, setView] = useState('coordinator')
+  const { addToast } = useToast()
+  const seenViolations = useRef(new Set())
 
   useEffect(() => {
-    onPush(setSnap)
+    onPush((incoming) => {
+      setSnap(incoming)
+      // Surface new violations as toasts
+      const violations = incoming?.violations ?? []
+      for (const v of violations) {
+        const key = v.id || `${v.rule_id}-${v.artifact}`
+        if (seenViolations.current.has(key)) continue
+        seenViolations.current.add(key)
+        addToast({
+          id: key,
+          severity: v.severity || 'warning',
+          rule_id: v.rule_id,
+          issue_id: v.issue_id || null,
+          agent_id: v.agent_id || null,
+          message: v.message,
+        })
+      }
+    })
     whenReady(async () => {
       setLive(true)
       const s = await getState()
       if (s) setSnap(s)
     })
-    // Browser preview fallback: if no bridge connected shortly, show mock data.
     const t = setTimeout(() => { if (!hasBridge()) setSnap(MOCK) }, 500)
     return () => clearTimeout(t)
-  }, [])
-
-  async function doRescan() {
-    setBusy(true)
-    const s = await rescan()
-    if (s) setSnap(s)
-    setBusy(false)
-  }
+  }, [addToast])
 
   if (!snap) return <Splash />
 
-  const sum = snap.summary
   return (
     <div className="min-h-full text-slate-200">
       <header className="sticky top-0 z-10 border-b border-white/5 bg-[#0b0e14]/80 backdrop-blur">
@@ -51,7 +58,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5 text-xs">
-              {['compliance', 'code', 'agent', 'coordinator'].map((v) => (
+              {['coordinator', 'code', 'agent'].map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -67,15 +74,6 @@ export default function App() {
               <span className={`h-2 w-2 rounded-full ${live ? 'animate-pulse bg-emerald-400' : 'bg-slate-600'}`} />
               {live ? 'Live' : 'Preview'}
             </span>
-            {view === 'compliance' && (
-              <button
-                onClick={doRescan}
-                disabled={busy || !live}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 disabled:opacity-50"
-              >
-                {busy ? 'Scanning…' : 'Rescan'}
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -85,25 +83,19 @@ export default function App() {
           <CodeView />
         ) : view === 'agent' ? (
           <RunAgent />
-        ) : view === 'coordinator' ? (
-          <Coordinator />
         ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Issues" value={sum.issues} />
-              <StatCard label="Open violations" value={sum.violations} tone={sum.violations ? 'warning' : 'ok'} />
-              <StatCard label="Errors" value={sum.error} tone={sum.error ? 'error' : 'ok'} />
-              <StatCard label="Warnings" value={sum.warning} tone={sum.warning ? 'warning' : 'ok'} />
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <Dashboard issues={snap.issues} />
-              <Violations violations={snap.violations} />
-            </div>
-          </>
+          <Coordinator />
         )}
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
   )
 }
 
