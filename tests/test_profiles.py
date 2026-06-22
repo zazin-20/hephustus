@@ -5,6 +5,8 @@ import json
 import pytest
 
 from hephaestus.store.db import connect
+from hephaestus.store.runs import create_run
+from hephaestus.store.threads import append_turn, get_or_create_thread
 from hephaestus.store.profiles import (
     create_profile,
     delete_profile,
@@ -79,9 +81,41 @@ def test_delete_removes_profile(tmp_path):
     db_path = make_db_path(tmp_path)
     created = create_profile(db_path, tmp_path, "Worker One", "worker", [])
 
-    delete_profile(db_path, created.agent_id)
+    delete_profile(db_path, created.agent_id, tmp_path)
 
     assert list_profiles(db_path) == []
+
+
+def test_delete_profile_cascades_runtime_rows_and_identity_card(tmp_path):
+    db_path = make_db_path(tmp_path)
+    created = create_profile(db_path, tmp_path, "Worker One", "worker", [])
+    thread = get_or_create_thread(db_path, agent_id=created.agent_id, name="issue-003", issue_id="issue-003")
+    run = create_run(
+        db_path,
+        thread_id=thread.id,
+        agent_id=created.agent_id,
+        contract={"agent_id": created.agent_id, "role": created.role},
+    )
+    append_turn(db_path, thread.id, role="user", text="hello", kind="text", run_id=run.id)
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO trace_events(id, run_id, agent_id, ts, action, target_path, raw)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("trace-001", run.id, created.agent_id, "2026-06-22T00:00:00Z", "write_file", "foo.py", "{}"),
+        )
+        conn.commit()
+
+    delete_profile(db_path, created.agent_id, tmp_path)
+
+    with connect(db_path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM profiles").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM threads").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM runs").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM turns").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM trace_events").fetchone() == (0,)
+    assert not (tmp_path / "agents" / "identities" / f"{created.agent_id}.json").exists()
 
 
 def test_optional_fields_default_to_none(tmp_path):

@@ -105,10 +105,30 @@ def get_profile(db_path: Path, agent_id: str) -> Profile:
     return _row_to_profile(row)
 
 
-def delete_profile(db_path: Path, agent_id: str) -> None:
+def delete_profile(db_path: Path, agent_id: str, okf_root: Path | None = None) -> None:
     with connect(db_path) as conn:
+        conn.execute(
+            """
+            DELETE FROM trace_events
+            WHERE agent_id = ?
+               OR run_id IN (SELECT id FROM runs WHERE agent_id = ?)
+            """,
+            (agent_id, agent_id),
+        )
+        conn.execute(
+            """
+            DELETE FROM turns
+            WHERE thread_id IN (SELECT id FROM threads WHERE agent_id = ?)
+            """,
+            (agent_id,),
+        )
+        conn.execute("DELETE FROM runs WHERE agent_id = ?", (agent_id,))
+        conn.execute("DELETE FROM threads WHERE agent_id = ?", (agent_id,))
         conn.execute("DELETE FROM profiles WHERE agent_id = ?", (agent_id,))
         conn.commit()
+    if okf_root is not None:
+        card_path = Path(okf_root) / "agents" / "identities" / f"{agent_id}.json"
+        card_path.unlink(missing_ok=True)
 
 
 def _next_agent_id(conn, role: str) -> str:

@@ -105,7 +105,7 @@ class Bridge:
     def delete_profile(self, agent_id: str) -> None:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        delete_profile_record(self._app._workspace.state_db_path, agent_id)
+        delete_profile_record(self._app._workspace.state_db_path, agent_id, self._app._workspace.root)
 
     def list_threads(self, agent_id: str) -> list[dict]:
         if self._app is None:
