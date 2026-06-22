@@ -65,6 +65,7 @@ def list_trace_events(
     *,
     run_id: str | None = None,
     agent_id: str | None = None,
+    thread_id: str | None = None,
 ) -> list[TraceEvent]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -75,6 +76,9 @@ def list_trace_events(
     if agent_id is not None:
         clauses.append("agent_id = ?")
         params.append(agent_id)
+    if thread_id is not None:
+        clauses.append("run_id IN (SELECT id FROM runs WHERE thread_id = ?)")
+        params.append(thread_id)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"""

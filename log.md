@@ -458,3 +458,30 @@ Rewrote the item mapping to emit a `tool_call` for `command_execution` (action
 which would otherwise double-emit). Added `_codex_args` to normalize string-encoded
 arguments. **Tests:** 154 passing — command_execution → tool_call, string-arg
 function_call, and item.started de-dup.
+
+---
+
+## 2026-06-23 — Trace: capture command output + collapsible execution log
+
+**Type:** Implementation
+**Author:** Human + Claude
+
+Tool calls reached the Trace bucket but lost their **output**, and the bucket only
+loaded for the live run (reopening a thread showed nothing — "not persisting").
+
+- **Capture output**: `_codex_event` command_execution now stores
+  `aggregated_output` + `exit_code` in the trace `raw`, not just the command.
+- **Persist by thread**: `list_trace_events(thread_id=…)` (joins `runs`); the UI
+  loads a thread's full trace on open via `get_trace(thread_id=…)`, so it survives
+  reopening — not just the live run's `run_id`.
+- **Live detail**: `_push_agent` now forwards `ev.raw`, so streaming tool-call rows
+  show the command immediately (not just the action).
+- **UI — collapsible execution log** (decluttered by default): each tool call is one
+  compact row (action badge + command + exit-code chip + time); click to expand the
+  full command + output in a mono block. Conversation stays tool-call-free; detail
+  is on demand. Shell calls get a violet `shell` badge.
+
+Backend persistence was verified end-to-end (a `command_execution` persists as
+`('shell', 'echo hi')`). **Note:** the desktop app must be restarted to pick up the
+Python runner/bridge changes. **Tests:** 155 passing — output capture + thread-scoped
+trace persistence.

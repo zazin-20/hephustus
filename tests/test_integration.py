@@ -190,10 +190,41 @@ def test_codex_event_captures_command_execution_as_tool_call():
         "type": "item.completed",
         "item": {"type": "command_execution", "command": "echo hi", "exit_code": 0},
     }
+    raw["item"]["aggregated_output"] = "hi\n"
     ev = _codex_event(raw)
     assert ev.kind == "tool_call"
     assert ev.raw["action"] == "shell"
     assert _extract_target_path(ev.raw["input"]) == "echo hi"
+    assert ev.raw["output"] == "hi\n"
+    assert ev.raw["exit_code"] == 0
+
+
+def test_trace_persists_and_queryable_by_thread(tmp_path):
+    """Tool-call traces persist and are retrievable by thread (survives reopen)."""
+    from hephaestus.store.trace import list_trace_events
+
+    class _ToolRunner:
+        tool = Tool.CODEX
+
+        async def run(self, task, ctx):
+            yield AgentEvent(
+                "tool_call", "shell",
+                raw={"action": "shell", "input": {"command": "echo hi"}, "output": "hi", "exit_code": 0},
+            )
+            yield AgentEvent("text", "done")
+
+    async def go():
+        runners = {Tool.CLAUDE: _ToolRunner(), Tool.CODEX: _ToolRunner()}
+        svc = AgentService(tmp_path, runners=runners)
+        prepared = svc.begin(AgentTask(role=Role.WORKER, prompt="x", issue_id="issue-001", model="gpt-5.4"))
+        async for _ in svc.run(prepared):
+            pass
+        return svc.state_db_path, prepared.thread_id
+
+    db, thread_id = asyncio.run(go())
+    tr = list_trace_events(db, thread_id=thread_id)
+    assert [(t.action, t.target_path) for t in tr] == [("shell", "echo hi")]
+    assert tr[0].raw["output"] == "hi"
 
 
 def test_codex_event_function_call_parses_string_arguments():

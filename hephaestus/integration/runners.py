@@ -268,8 +268,16 @@ def _codex_event(raw: dict) -> AgentEvent:
     if item is not None and raw_kind == "item.completed":
         itype = item.get("type")
         if itype == "command_execution":
-            command = item.get("command", "")
-            return AgentEvent("tool_call", "shell", raw={"action": "shell", "input": {"command": command}})
+            return AgentEvent(
+                "tool_call",
+                "shell",
+                raw={
+                    "action": "shell",
+                    "input": {"command": item.get("command", "")},
+                    "output": item.get("aggregated_output") or item.get("output") or "",
+                    "exit_code": item.get("exit_code"),
+                },
+            )
         if itype == "function_call":
             name = item.get("name", "") or "function"
             return AgentEvent("tool_call", name, raw={"action": name, "input": _codex_args(item.get("arguments"))})

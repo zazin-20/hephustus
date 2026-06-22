@@ -154,7 +154,7 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         return self._app.start_profile_agent(agent_id, prompt, issue_id, model)
 
-    def get_trace(self, run_id: str | None = None, agent_id: str | None = None) -> list[dict]:
+    def get_trace(self, run_id: str | None = None, agent_id: str | None = None, thread_id: str | None = None) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         from hephaestus.store.trace import list_trace_events
@@ -162,6 +162,7 @@ class Bridge:
             self._app._workspace.state_db_path,
             run_id=run_id or None,
             agent_id=agent_id or None,
+            thread_id=thread_id or None,
         )
         return [asdict(e) for e in events]
 
@@ -302,16 +303,16 @@ class DesktopApp:
     async def _stream_agent(self, prepared) -> None:
         try:
             async for ev in self._agents.run(prepared):
-                self._push_agent(prepared.run_id, ev.kind, ev.text)
+                self._push_agent(prepared.run_id, ev.kind, ev.text, ev.raw)
         except Exception as exc:  # surface failures to the UI, don't die silently
             self._push_agent(prepared.run_id, "error", str(exc))
         finally:
             self._push_agent(prepared.run_id, "done", "")
 
-    def _push_agent(self, run_id: str, kind: str, text: str) -> None:
+    def _push_agent(self, run_id: str, kind: str, text: str, raw: dict | None = None) -> None:
         if self._window is None:
             return
-        payload = json.dumps({"run_id": run_id, "kind": kind, "text": text})
+        payload = json.dumps({"run_id": run_id, "kind": kind, "text": text, "raw": raw})
         self._window.evaluate_js(
             f"window.__hephaestus_agent__ && window.__hephaestus_agent__({payload})"
         )

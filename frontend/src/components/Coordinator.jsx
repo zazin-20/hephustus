@@ -136,6 +136,7 @@ export default function Coordinator() {
   const [sending, setSending] = useState(false)
   const [traceEvents, setTraceEvents] = useState([])
   const [showTrace, setShowTrace] = useState(false)
+  const [openTrace, setOpenTrace] = useState([])
   const [copied, setCopied] = useState(false)
   const [spawnCard, setSpawnCard] = useState(null)
   const activeRunId = useRef(null)
@@ -163,10 +164,9 @@ export default function Coordinator() {
       if (ev.run_id !== activeRunId.current) return
       if (ev.kind === 'done') {
         setSending(false)
+        // loadThreadsFor reloads the persisted trace for the thread (full command
+        // + output), replacing the lighter live entries.
         if (activeAgentId.current) void loadThreadsFor(activeAgentId.current, activeThreadId.current)
-        if (activeRunId.current && hasBridge()) {
-          void getTrace(activeRunId.current, null).then(setTraceEvents)
-        }
         return
       }
       if (ev.kind === 'text' && hasBridge() && ev.text) {
@@ -180,7 +180,13 @@ export default function Coordinator() {
       if (ev.kind === 'tool_call') {
         setTraceEvents((current) => [
           ...current,
-          { id: `live-${current.length}`, action: ev.text, target_path: null, ts: new Date().toISOString() },
+          {
+            id: `live-${current.length}`,
+            action: ev.raw?.action || ev.text,
+            target_path: ev.raw?.input?.command || ev.raw?.input?.path || ev.raw?.input?.file_path || null,
+            raw: ev.raw || null,
+            ts: new Date().toISOString(),
+          },
         ])
       }
       setTranscript((current) => [
@@ -248,15 +254,24 @@ export default function Coordinator() {
 
     if (!nextThreadId) {
       setTranscript([])
+      setTraceEvents([])
       return
     }
 
     const turns = (await getTranscript(nextThreadId)) || []
     setTranscript(turns)
+    // Load the thread's persisted trace (tool calls across all its runs) so it
+    // survives reopening the thread, not just the live run.
+    const trace = (await getTrace(null, null, nextThreadId)) || []
+    setTraceEvents(trace)
   }
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function toggleTraceRow(id) {
+    setOpenTrace((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
   }
 
   function toggleRule(ruleId) {
@@ -714,10 +729,14 @@ export default function Coordinator() {
                         <button
                           type="button"
                           onClick={() => void toggleTurn(turn)}
-                          title={excluded ? 'include in context' : 'exclude from context'}
-                          className="shrink-0 select-none text-[11px] text-slate-700 opacity-0 transition group-hover:opacity-100 hover:text-slate-300"
+                          title={excluded ? 'include this turn in the agent context' : 'exclude this turn from the agent context'}
+                          className={`shrink-0 select-none rounded border px-2 py-0.5 text-[11px] font-medium transition ${
+                            excluded
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                              : 'border-white/10 text-slate-500 hover:border-white/25 hover:text-slate-200'
+                          }`}
                         >
-                          {excluded ? '+' : '×'}
+                          {excluded ? 'include' : 'exclude'}
                         </button>
                       </div>
                     )
@@ -740,26 +759,55 @@ export default function Coordinator() {
                 <span className="text-slate-500 text-xs">{showTrace ? '▲ hide' : '▼ show'}</span>
               </button>
               {showTrace && (
-                <div className="border-t border-white/5 max-h-48 overflow-auto p-3 space-y-1.5">
+                <div className="border-t border-white/5 max-h-64 overflow-auto p-3 space-y-1">
                   {traceEvents.length === 0 ? (
-                    <div className="text-xs text-slate-500 text-center py-4">No trace events for this run.</div>
+                    <div className="text-xs text-slate-500 text-center py-4">No tool calls yet.</div>
                   ) : (
                     traceEvents.map((ev, i) => {
+                      const id = ev.id || `t-${i}`
+                      const open = openTrace.includes(id)
+                      const command =
+                        ev.target_path || ev.raw?.input?.command || ev.raw?.input?.path || ev.raw?.input?.file_path || ''
+                      const output = ev.raw?.output
+                      const exit = ev.raw?.exit_code
+                      const hasDetail = Boolean(command || output)
                       const actionStyle =
                         ev.action === 'write_file' || ev.action === 'Write'
                           ? 'bg-orange-500/15 text-orange-300 ring-orange-500/30'
                           : ev.action === 'read_file' || ev.action === 'Read'
                           ? 'bg-sky-500/15 text-sky-300 ring-sky-500/30'
+                          : ev.action === 'shell'
+                          ? 'bg-violet-500/15 text-violet-300 ring-violet-500/30'
                           : 'bg-slate-500/15 text-slate-300 ring-white/10'
                       return (
-                        <div key={ev.id || i} className="flex items-center gap-2 text-xs">
-                          <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${actionStyle}`}>
-                            {ev.action}
-                          </span>
-                          {ev.target_path && (
-                            <span className="truncate font-mono text-slate-400">{ev.target_path}</span>
+                        <div key={id} className="rounded-lg border border-white/5 bg-black/20">
+                          <button
+                            type="button"
+                            onClick={() => hasDetail && toggleTraceRow(id)}
+                            className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${hasDetail ? 'hover:bg-white/5' : 'cursor-default'}`}
+                          >
+                            <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${actionStyle}`}>
+                              {ev.action}
+                            </span>
+                            <span className="flex-1 truncate font-mono text-slate-400">{command}</span>
+                            {exit !== undefined && exit !== null && (
+                              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${exit === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                exit {exit}
+                              </span>
+                            )}
+                            <span className="shrink-0 text-slate-600">{ev.ts ? ev.ts.slice(11, 19) : ''}</span>
+                            {hasDetail && <span className="shrink-0 text-slate-600">{open ? '▲' : '▼'}</span>}
+                          </button>
+                          {open && (
+                            <div className="border-t border-white/5 px-2 py-1.5 font-mono text-[11px]">
+                              {command && <div className="whitespace-pre-wrap break-words text-slate-300">$ {command}</div>}
+                              {output ? (
+                                <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-words text-slate-500">{output}</pre>
+                              ) : (
+                                <div className="mt-1 text-slate-600">(no output captured)</div>
+                              )}
+                            </div>
                           )}
-                          <span className="ml-auto shrink-0 text-slate-600">{ev.ts ? ev.ts.slice(11, 19) : ''}</span>
                         </div>
                       )
                     })
