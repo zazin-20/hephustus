@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -154,6 +155,23 @@ def test_claude_event_captures_thinking_and_text():
     by_kind = {e.kind: e.text for e in (result if isinstance(result, list) else [result])}
     assert by_kind.get("thinking") == "weighing the options"
     assert by_kind.get("text") == "here is my answer"
+
+
+def test_decode_codex_line_handles_oversized_line():
+    """A JSONL line far larger than asyncio's 64KB readline cap must decode fine."""
+    from hephaestus.integration.runners import _decode_codex_line
+
+    big = "x" * (200_000)
+    line = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": big}})
+    ev = _decode_codex_line(line.encode("utf-8"))
+    assert ev.kind == "text"
+    assert ev.text == big
+
+
+def test_decode_codex_line_blank_is_none():
+    from hephaestus.integration.runners import _decode_codex_line
+
+    assert _decode_codex_line(b"   ") is None
 
 
 def test_codex_event_maps_reasoning_to_thinking():

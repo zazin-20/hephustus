@@ -422,3 +422,18 @@ lifecycle turns, model-provider routing, and provider classification.
 
 **Housekeeping:** gitignored runtime identity cards (`agents/identities/`) and the
 stray `tmp_pytest/` scratch dir.
+
+---
+
+## 2026-06-22 — Fix: Codex stdout 64 KB line-buffer overrun
+
+**Type:** Bugfix
+**Author:** Human + Claude
+
+Codex runs were dying with `LimitOverrunError: Separator is not found, and chunk
+exceed the limit`. Cause: `CodexRunner` read stdout via `async for line in
+proc.stdout`, which uses `readline()` — asyncio's `StreamReader` caps a single
+line at 64 KB and raises when codex emits a longer JSONL line (big agent message,
+reasoning blob, or file read). Fixed by reading raw 64 KB chunks and splitting on
+newlines ourselves (`read()` has no per-line cap), via a `_decode_codex_line`
+helper. **Tests:** 151 passing — added oversized-line (200 KB) + blank-line decode.

@@ -278,6 +278,17 @@ def _codex_event(raw: dict) -> AgentEvent:
     return AgentEvent(kind=str(kind), text=str(text), raw=raw)
 
 
+def _decode_codex_line(raw_line: bytes) -> AgentEvent | None:
+    """Parse one codex JSONL line into an event (None for blank lines)."""
+    text = raw_line.decode("utf-8", "replace").strip()
+    if not text:
+        return None
+    try:
+        return _codex_event(json.loads(text))
+    except json.JSONDecodeError:
+        return AgentEvent("text", text)
+
+
 class CodexRunner:
     tool = Tool.CODEX
 
@@ -296,16 +307,25 @@ class CodexRunner:
             proc.stdin.close()
 
         assert proc.stdout is not None
-        async for line in proc.stdout:
-            text = line.decode("utf-8", "replace").strip()
-            if not text:
-                continue
-            try:
-                raw = json.loads(text)
-            except json.JSONDecodeError:
-                yield AgentEvent("text", text)
-                continue
-            yield _codex_event(raw)
+        # Read raw chunks and split on newlines ourselves. `async for line in
+        # proc.stdout` uses readline(), which caps a single line at asyncio's 64 KB
+        # StreamReader limit and raises LimitOverrunError ("Separator is not found,
+        # and chunk exceed the limit") when codex emits a long JSONL line. read()
+        # has no such cap.
+        buffer = b""
+        while True:
+            chunk = await proc.stdout.read(65536)
+            if not chunk:
+                break
+            buffer += chunk
+            while b"\n" in buffer:
+                raw_line, buffer = buffer.split(b"\n", 1)
+                event = _decode_codex_line(raw_line)
+                if event is not None:
+                    yield event
+        event = _decode_codex_line(buffer)
+        if event is not None:
+            yield event
 
         await proc.wait()
         if proc.returncode:
