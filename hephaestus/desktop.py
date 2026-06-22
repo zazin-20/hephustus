@@ -165,6 +165,30 @@ class Bridge:
             ],
         }
 
+    # Corrections feedback queue
+    def save_correction(self, violation_id, agent_id, issue_id, note: str) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        from hephaestus.store.corrections import append_correction
+        c = append_correction(
+            self._app._workspace.state_db_path,
+            violation_id=violation_id or None,
+            agent_id=agent_id or None,
+            issue_id=issue_id or None,
+            note=note,
+        )
+        return asdict(c)
+
+    def get_corrections(self, agent_id=None, issue_id=None) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        from hephaestus.store.corrections import list_corrections
+        return [asdict(c) for c in list_corrections(
+            self._app._workspace.state_db_path,
+            agent_id=agent_id or None,
+            issue_id=issue_id or None,
+        )]
+
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
     def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None) -> dict:
         if self._app is None:
