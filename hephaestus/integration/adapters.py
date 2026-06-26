@@ -25,7 +25,7 @@ _EFFORT_APPROVAL = {
 def claude_flags(contract: ExecutionContract) -> dict:
     flags: dict = {
         "permission_mode": _EFFORT_PERMISSION.get(contract.effort, "default"),
-        "cwd": _scope_to_cwd(contract.scope),
+        "cwd": contract.cwd or _scope_to_cwd(contract.scope),
     }
     if contract.tools:
         flags["allowed_tools"] = list(contract.tools)
@@ -38,7 +38,7 @@ def codex_flags(contract: ExecutionContract) -> dict:
     return {
         "sandbox": _EFFORT_SANDBOX.get(contract.effort, True),
         "approval_policy": _EFFORT_APPROVAL.get(contract.effort, "auto"),
-        "working_dir": _scope_to_cwd(contract.scope),
+        "working_dir": contract.cwd or _scope_to_cwd(contract.scope),
     }
 
 

@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from hephaestus.okf_layout import OKFLayout
 from hephaestus.store.db import connect
 from hephaestus.store.runs import create_run
 from hephaestus.store.threads import append_turn, get_or_create_thread
@@ -118,6 +119,15 @@ def test_delete_profile_cascades_runtime_rows_and_identity_card(tmp_path):
     assert not (tmp_path / "agents" / "identities" / f"{created.agent_id}.json").exists()
 
 
+def test_delete_profile_accepts_agents_root_for_identity_cleanup(tmp_path):
+    db_path = make_db_path(tmp_path)
+    created = create_profile(db_path, tmp_path, "Worker One", "worker", [])
+
+    delete_profile(db_path, created.agent_id, tmp_path / "agents")
+
+    assert not (tmp_path / "agents" / "identities" / f"{created.agent_id}.json").exists()
+
+
 def test_optional_fields_default_to_none(tmp_path):
     db_path = make_db_path(tmp_path)
 
@@ -145,6 +155,15 @@ def test_identity_card_written_on_create(tmp_path):
     card_path = tmp_path / "agents" / "identities" / f"{created.agent_id}.json"
 
     assert card_path.exists()
+
+
+def test_create_profile_accepts_agents_root_for_identity_card(tmp_path):
+    db_path = make_db_path(tmp_path)
+    agents_root = tmp_path / "agents"
+
+    created = create_profile(db_path, agents_root, "Architect One", "architect", ["S-001"])
+
+    assert OKFLayout.for_existing_root(agents_root).identity_card_path(created.agent_id).exists()
 
 
 def test_identity_card_has_correct_fields(tmp_path):

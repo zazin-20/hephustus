@@ -1,5 +1,10 @@
 """Compliance monitor — stateful rescan + violation diff.
 
+REUSABLE — rule-agnostic re-check + diff (added/resolved/current). Runs whatever
+rules it's given on each refresh; repurposes directly to "re-evaluate gates on
+change, show what newly failed/passed" for user-authored workflows.
+
+
 `ComplianceMonitor` is pure and watcher-agnostic: feed it `refresh()` calls from
 any source (the file watcher, a manual "re-check" button, a test) and it reports
 what changed since the last scan. This is the engine behind both compliance loops

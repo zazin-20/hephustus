@@ -64,9 +64,9 @@ def test_claude_flags_disallowed_tools():
 
 
 def test_claude_flags_cwd_from_scope():
-    c = _contract(scope="issue:007", actor="work-001")
+    c = _contract(scope="issue:007", actor="work-001", cwd="/repo")
     flags = claude_flags(c)
-    assert "cwd" in flags
+    assert flags["cwd"] == "/repo"
 
 
 def test_codex_flags_default_effort():
@@ -91,6 +91,6 @@ def test_codex_flags_medium_effort():
 
 
 def test_codex_flags_working_dir():
-    c = _contract()
+    c = _contract(cwd="/repo")
     flags = codex_flags(c)
-    assert "working_dir" in flags
+    assert flags["working_dir"] == "/repo"

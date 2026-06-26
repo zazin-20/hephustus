@@ -65,6 +65,29 @@ def test_handler_triggers_on_markdown_rename():
     assert rec.count == 1
 
 
+def test_watcher_prefers_agents_subtree_when_present(tmp_path):
+    root = tmp_path / "workspace"
+    agents = root / "agents"
+    agents.mkdir(parents=True)
+
+    from hephaestus.watch import OKFWatcher
+
+    watcher = OKFWatcher(root, lambda delta: None)
+
+    assert watcher._watch_dir() == agents
+
+
+def test_watcher_accepts_agents_root_directly(tmp_path):
+    agents = tmp_path / "workspace" / "agents"
+    agents.mkdir(parents=True)
+
+    from hephaestus.watch import OKFWatcher
+
+    watcher = OKFWatcher(agents, lambda delta: None)
+
+    assert watcher._watch_dir() == agents
+
+
 def test_watcher_end_to_end_detects_a_new_violation(clean_tree):
     pytest.importorskip("watchdog")
     from hephaestus.watch import OKFWatcher
@@ -74,11 +97,9 @@ def test_watcher_end_to_end_detects_a_new_violation(clean_tree):
         watcher = OKFWatcher(clean_tree, deltas.append, delay=0.05)
         await watcher.start()  # emits clean baseline as deltas[0]
 
-        issue = clean_tree / "agents" / "architect" / "issues" / "issue-002.md"
-        issue.write_text(
-            issue.read_text(encoding="utf-8").replace("status: open", "status: done"),
-            encoding="utf-8",
-        )
+        # Write a malformed document -> a Tier-1 schema load error.
+        broken = clean_tree / "agents" / "architect" / "issues" / "broken.md"
+        broken.write_text("---\nid: x\nunterminated", encoding="utf-8")
 
         for _ in range(60):  # up to ~3s for the FS event + debounce
             await asyncio.sleep(0.05)
@@ -90,4 +111,4 @@ def test_watcher_end_to_end_detects_a_new_violation(clean_tree):
     deltas = asyncio.run(run())
     assert len(deltas) >= 2
     added_ids = {v.rule_id for d in deltas[1:] for v in d.added}
-    assert "S-002" in added_ids
+    assert "schema" in added_ids

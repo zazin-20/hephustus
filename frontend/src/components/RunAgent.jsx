@@ -3,11 +3,13 @@ import { runAgent, onAgent } from '../api.js'
 
 const ROLES = ['orchestrator', 'product-manager', 'architect', 'worker', 'qa', 'design-system', 'devops']
 
-const KIND_STYLE = {
-  text: 'text-slate-200',
-  system: 'text-slate-500',
-  result: 'text-emerald-300',
+const CATEGORY_STYLE = {
+  content: 'text-slate-200',
+  thinking: 'text-violet-300',
+  lifecycle: 'text-slate-500',
+  tool: 'text-sky-300',
   error: 'text-rose-300',
+  transport: 'text-slate-500',
 }
 
 const INPUT = 'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
@@ -34,7 +36,7 @@ export default function RunAgent() {
   useEffect(() => {
     onAgent((ev) => {
       if (ev.run_id !== runId.current) return
-      if (ev.kind === 'done') { setRunning(false); return }
+      if (ev.category === 'transport') { setRunning(false); return }
       setEvents((cur) => [...cur, ev])
     })
     return () => { window.__hephaestus_agent__ = null }
@@ -46,7 +48,7 @@ export default function RunAgent() {
     const res = await runAgent(role, prompt, issue, cwd, null)
     if (!res) {
       setRunning(false)
-      setEvents([{ kind: 'error', text: 'Agent bridge unavailable — run inside the desktop app.' }])
+      setEvents([{ kind: 'error', text: 'Agent bridge unavailable — run inside the desktop app.', category: 'error' }])
       return
     }
     runId.current = res.run_id
@@ -103,7 +105,7 @@ export default function RunAgent() {
         ) : (
           <div className="max-h-[70vh] space-y-0.5 overflow-auto p-4 font-mono text-[12.5px] leading-relaxed">
             {events.map((ev, i) => (
-              <div key={i} className={KIND_STYLE[ev.kind] || 'text-slate-400'}>
+              <div key={i} className={CATEGORY_STYLE[ev.category] || 'text-slate-400'}>
                 <span className="select-none text-slate-600">[{ev.kind}] </span>
                 <span className="whitespace-pre-wrap break-words">{ev.text}</span>
               </div>

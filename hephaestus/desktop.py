@@ -19,7 +19,8 @@ from pathlib import Path
 
 from hephaestus.codeview import CodeViewer
 from hephaestus.dashboard import snapshot
-from hephaestus.integration import AgentService, AgentTask, Role
+from hephaestus.integration import AgentService
+from hephaestus.integration.turns import turn_payload
 from hephaestus.store.profiles import create_profile as create_profile_record
 from hephaestus.store.profiles import delete_profile as delete_profile_record
 from hephaestus.store.profiles import get_profile as get_profile_record
@@ -63,8 +64,9 @@ class Bridge:
         return catalog()
 
     def list_rules(self) -> list[dict]:
+        # Built-in rules are now just the generic governance layer; structural
+        # issue-lifecycle rules were removed in favor of user-authored specs.
         from hephaestus.rules.governance import ALL_GOVERNANCE_RULES
-        from hephaestus.rules.structural import ALL_STRUCTURAL_RULES
         return [
             {
                 "id": rule.id,
@@ -72,7 +74,7 @@ class Bridge:
                 "severity": getattr(rule.severity, "value", str(rule.severity)),
                 "fix_hint": rule.fix_hint,
             }
-            for rule in (*ALL_STRUCTURAL_RULES, *ALL_GOVERNANCE_RULES)
+            for rule in ALL_GOVERNANCE_RULES
         ]
 
     def pick_directory(self) -> str | None:
@@ -142,7 +144,13 @@ class Bridge:
     def get_transcript(self, thread_id: str) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        return [asdict(turn) for turn in list_turn_records(self._app._workspace.state_db_path, thread_id)]
+        return [
+            {
+                **asdict(turn),
+                **turn_payload(turn.kind, text=turn.text, role=turn.role),
+            }
+            for turn in list_turn_records(self._app._workspace.state_db_path, thread_id)
+        ]
 
     def set_turn_included(self, turn_id: str, included: bool) -> None:
         if self._app is None:
@@ -262,39 +270,34 @@ class DesktopApp:
     def start_agent(self, role, prompt, issue_id=None, cwd=None, model=None, effort=None) -> dict:
         if self._loop is None:
             raise RuntimeError("core loop not started yet")
-        task = AgentTask(
-            role=Role(role),
+        prepared = self._agents.begin_role_run(
+            role=role,
             prompt=prompt,
-            issue_id=issue_id or None,
-            cwd=Path(cwd) if cwd else None,
-            model=model or None,
-            effort=effort or None,
+            issue_id=issue_id,
+            cwd=cwd,
+            model=model,
+            effort=effort,
         )
-        return self._start_task(task)
+        return self._launch_prepared(prepared)
 
     def start_profile_agent(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
         if self._loop is None:
             raise RuntimeError("core loop not started yet")
-        profile = get_profile_record(self._workspace.state_db_path, agent_id)
-        task = AgentTask(
-            role=Role(profile.role),
-            prompt=prompt,
-            issue_id=issue_id or None,
+        prepared = self._agents.begin_profile_run(
             agent_id=agent_id,
-            cwd=Path(profile.working_dir) if profile.working_dir else None,
-            model=model or profile.model,
-            effort=profile.effort,
+            prompt=prompt,
+            issue_id=issue_id,
+            model=model,
         )
-        return self._start_task(task)
+        return self._launch_prepared(prepared)
 
-    def _start_task(self, task: AgentTask) -> dict:
-        prepared = self._agents.begin(task)
+    def _launch_prepared(self, prepared) -> dict:
         asyncio.run_coroutine_threadsafe(self._stream_agent(prepared), self._loop)
         return {
             "run_id": prepared.run_id,
             "thread_id": prepared.thread_id,
             "agent_id": prepared.agent_id,
-            "role": task.role.value,
+            "role": prepared.task.role.value,
             "tool": prepared.tool.value,
             "context": [p.name for p in prepared.ctx.files],
             "missing": [p.name for p in prepared.ctx.missing],
@@ -303,16 +306,46 @@ class DesktopApp:
     async def _stream_agent(self, prepared) -> None:
         try:
             async for ev in self._agents.run(prepared):
-                self._push_agent(prepared.run_id, ev.kind, ev.text, ev.raw)
+                self._push_agent(prepared.run_id, ev)
         except Exception as exc:  # surface failures to the UI, don't die silently
-            self._push_agent(prepared.run_id, "error", str(exc))
+            self._push_agent(prepared.run_id, kind="error", text=str(exc))
         finally:
-            self._push_agent(prepared.run_id, "done", "")
+            self._push_agent(
+                prepared.run_id,
+                kind="done",
+                text="",
+                raw=None,
+                category="transport",
+                persist=False,
+                transcript_role=None,
+                label="agent",
+                conversation=False,
+            )
 
-    def _push_agent(self, run_id: str, kind: str, text: str, raw: dict | None = None) -> None:
+    def _push_agent(self, run_id: str, event=None, **kwargs) -> None:
         if self._window is None:
             return
-        payload = json.dumps({"run_id": run_id, "kind": kind, "text": text, "raw": raw})
+        if event is not None:
+            payload_dict = {
+                "run_id": run_id,
+                "kind": event.kind,
+                "text": event.text,
+                "raw": event.raw,
+                "category": event.category,
+                "persist": event.persist,
+                "transcript_role": event.transcript_role,
+                "label": event.label,
+                "conversation": event.conversation,
+            }
+        else:
+            kind = kwargs.get("kind")
+            if kind is not None and "category" not in kwargs:
+                kwargs = {
+                    **kwargs,
+                    **turn_payload(str(kind), text=str(kwargs.get("text") or "")),
+                }
+            payload_dict = {"run_id": run_id, **kwargs}
+        payload = json.dumps(payload_dict)
         self._window.evaluate_js(
             f"window.__hephaestus_agent__ && window.__hephaestus_agent__({payload})"
         )

@@ -63,19 +63,21 @@ def finish_run(
     status: str,
     usage: dict | None = None,
     outcome: dict | None = None,
+    contract: dict | None = None,
 ) -> None:
     ended_at = _utc_now()
     with connect(db_path) as conn:
         conn.execute(
             """
             UPDATE runs
-            SET status = ?, usage = ?, outcome = ?, ended_at = ?
+            SET status = ?, usage = ?, outcome = ?, contract = COALESCE(?, contract), ended_at = ?
             WHERE id = ?
             """,
             (
                 status,
                 dumps_json(usage) if usage is not None else None,
                 dumps_json(outcome) if outcome is not None else None,
+                dumps_json(contract) if contract is not None else None,
                 ended_at,
                 run_id,
             ),

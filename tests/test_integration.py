@@ -6,12 +6,31 @@ from pathlib import Path
 
 import pytest
 
+from hephaestus.contract import ExecutionContract
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.routing import Role, Tool, tool_for
 from hephaestus.integration.runners import AgentEvent, AgentTask, EchoRunner, build_codex_argv
-from hephaestus.integration.service import AgentService, SessionRegistry
+from hephaestus.integration.service import AgentService, PreparedRun, SessionRegistry
+from hephaestus.store.db import connect
+from hephaestus.store.profiles import create_profile
 from hephaestus.store.runs import get_run
 from hephaestus.store.threads import list_turns
+from hephaestus.store.violations import list_violations
+
+
+def _contract(**kwargs) -> ExecutionContract:
+    defaults = dict(
+        actor="work-001",
+        role="worker",
+        context="thread-001",
+        scope="issue:001",
+        model="gpt-5.4",
+        effort=None,
+        tools=[],
+        prompt="go",
+    )
+    defaults.update(kwargs)
+    return ExecutionContract(**defaults)
 
 
 def test_routing_is_static_and_role_based():
@@ -58,8 +77,10 @@ def test_codex_event_parses_real_schema():
 
 
 def test_build_codex_argv():
-    task = AgentTask(role=Role.WORKER, prompt="implement it", cwd=Path("/repo"), model="gpt-5")
-    argv = build_codex_argv(task, output_file="out.txt")
+    argv = build_codex_argv(
+        _contract(prompt="implement it", cwd=str(Path("/repo")), model="gpt-5"),
+        output_file="out.txt",
+    )
     assert argv[0] == "exec"
     assert "--json" in argv and "--skip-git-repo-check" in argv
     assert argv[argv.index("-C") + 1] == str(Path("/repo"))
@@ -69,14 +90,16 @@ def test_build_codex_argv():
 
 
 def test_build_codex_argv_passes_effort_via_config():
-    task = AgentTask(role=Role.WORKER, prompt="go", model="gpt-5.4", effort="high")
-    argv = build_codex_argv(task)
-    assert argv[argv.index("-c") + 1] == 'model_reasoning_effort="high"'
+    argv = build_codex_argv(_contract(effort="high"))
+    assert 'model_reasoning_effort="high"' in argv
+    assert 'sandbox_mode="danger-full-access"' in argv
+    assert 'approval_policy="manual"' in argv
 
 
 def test_build_codex_argv_omits_effort_when_unset():
-    argv = build_codex_argv(AgentTask(role=Role.WORKER, prompt="go", model="gpt-5.4"))
-    assert "-c" not in argv
+    argv = build_codex_argv(_contract(effort=None))
+    assert 'model_reasoning_effort="high"' not in argv
+    assert 'approval_policy="auto"' in argv
 
 
 def test_resolve_routes_by_model_provider(tmp_path):
@@ -105,6 +128,27 @@ def test_provider_for_model_classifies():
     assert provider_for_model("some-unknown-model") is None
 
 
+def test_agent_event_carries_normalized_turn_metadata():
+    tool = AgentEvent("tool_call", "shell")
+    assert tool.category == "tool"
+    assert tool.persist is True
+    assert tool.transcript_role == "tool"
+    assert tool.label == "tool"
+    assert tool.conversation is False
+
+    thinking = AgentEvent("thinking", "plan")
+    assert thinking.category == "thinking"
+    assert thinking.persist is True
+    assert thinking.transcript_role == "assistant"
+    assert thinking.label == "think"
+    assert thinking.conversation is True
+
+    system = AgentEvent("system", "")
+    assert system.category == "lifecycle"
+    assert system.persist is False
+    assert system.conversation is False
+
+
 def test_service_skips_empty_lifecycle_turns(tmp_path):
     """Empty system/result envelopes must not be persisted — only real content."""
     from hephaestus.store.threads import list_turns
@@ -112,7 +156,7 @@ def test_service_skips_empty_lifecycle_turns(tmp_path):
     class _LifecycleRunner:
         tool = Tool.CLAUDE
 
-        async def run(self, task, ctx):
+        async def run(self, contract, ctx):
             yield AgentEvent("system", "")       # lifecycle noise -> dropped
             yield AgentEvent("result", "")       # lifecycle noise -> dropped
             yield AgentEvent("thinking", "weighing it")
@@ -206,7 +250,7 @@ def test_trace_persists_and_queryable_by_thread(tmp_path):
     class _ToolRunner:
         tool = Tool.CODEX
 
-        async def run(self, task, ctx):
+        async def run(self, contract, ctx):
             yield AgentEvent(
                 "tool_call", "shell",
                 raw={"action": "shell", "input": {"command": "echo hi"}, "output": "hi", "exit_code": 0},
@@ -256,7 +300,7 @@ def test_claude_options_pass_effort():
     from hephaestus.integration.runners import _claude_options
 
     ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[], system_prompt="")
-    opts = _claude_options(ctx, AgentTask(role=Role.ARCHITECT, prompt="x", effort="xhigh"))
+    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x", effort="xhigh"))
     assert getattr(opts, "effort", None) == "xhigh"
 
 
@@ -273,6 +317,84 @@ def test_service_routes_worker_through_codex_echo():
     assert "echo:codex" in joined          # routed to the codex backend
     assert "issue-003" in joined           # issue context threaded through
     assert "hello worker" in joined
+
+
+def test_begin_role_run_is_callable_without_desktop(tmp_path):
+    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    service = AgentService(tmp_path, runners=runners)
+
+    prepared = service.begin_role_run(
+        role=Role.ARCHITECT,
+        prompt="design it",
+        issue_id="issue-010",
+        cwd=tmp_path / "repo",
+        model="gpt-5.4",
+        effort="high",
+    )
+
+    assert isinstance(prepared, PreparedRun)
+    assert prepared.task.role is Role.ARCHITECT
+    assert prepared.task.prompt == "design it"
+    assert prepared.task.issue_id == "issue-010"
+    assert prepared.task.cwd == (tmp_path / "repo")
+    assert prepared.task.model == "gpt-5.4"
+    assert prepared.task.effort == "high"
+    assert prepared.tool is Tool.CODEX
+
+
+def test_begin_profile_run_resolves_model_effort_and_cwd_from_profile(tmp_path):
+    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    service = AgentService(tmp_path, runners=runners)
+    profile = create_profile(
+        service.state_db_path,
+        tmp_path,
+        name="Worker One",
+        role="worker",
+        rules=["G-001"],
+        model="gpt-5.4",
+        effort="xhigh",
+        working_dir=str(tmp_path / "svc"),
+    )
+
+    prepared = service.begin_profile_run(
+        agent_id=profile.agent_id,
+        prompt="implement it",
+        issue_id="issue-012",
+    )
+
+    assert isinstance(prepared, PreparedRun)
+    assert prepared.agent_id == profile.agent_id
+    assert prepared.task.role is Role.WORKER
+    assert prepared.task.agent_id == profile.agent_id
+    assert prepared.task.model == "gpt-5.4"
+    assert prepared.task.effort == "xhigh"
+    assert prepared.task.cwd == (tmp_path / "svc")
+    assert prepared.tool is Tool.CODEX
+
+
+def test_service_persists_actual_model_and_governance_violation(tmp_path):
+    class _MismatchRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            yield AgentEvent("text", "done")
+            yield AgentEvent("result", "", raw={"actual_model": "gpt-5.5"})
+
+    async def go():
+        runners = {Tool.CLAUDE: _MismatchRunner(), Tool.CODEX: _MismatchRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        prepared = service.begin(AgentTask(role=Role.WORKER, prompt="go", issue_id="issue-013", model="gpt-5.4"))
+        async for _ in service.run(prepared):
+            pass
+        return service, prepared
+
+    service, prepared = asyncio.run(go())
+    run = get_run(service.state_db_path, prepared.run_id)
+    assert run.contract["model"] == "gpt-5.4"
+    assert run.contract["actual_model"] == "gpt-5.5"
+    with connect(service.state_db_path) as db:
+        violations = list_violations(db, run_id=prepared.run_id)
+    assert any(v["rule_id"] == "G-002" for v in violations)
 
 
 def test_service_persists_run_lifecycle_and_transcript(tmp_path):
@@ -340,11 +462,11 @@ def test_runs_serialize_per_actor_but_parallel_across_actors(tmp_path):
             self.active = 0
             self.max_active = 0
 
-        async def run(self, task, ctx):
+        async def run(self, contract, ctx):
             self.active += 1
             self.max_active = max(self.max_active, self.active)
             await asyncio.sleep(0.05)
-            yield AgentEvent("text", task.prompt)
+            yield AgentEvent("text", contract.prompt)
             await asyncio.sleep(0.05)
             self.active -= 1
             yield AgentEvent("result", "done")
@@ -406,7 +528,7 @@ def test_claude_options_actually_inject_context():
 
     ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[],
                          system_prompt="OKF DIRECTIVE CONTENT")
-    opts = _claude_options(ctx, AgentTask(role=Role.ARCHITECT, prompt="x"))
+    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x"))
     assert "OKF DIRECTIVE CONTENT" in str(opts.system_prompt)
 
 
@@ -418,8 +540,8 @@ def test_service_resumes_captured_session():
         def __init__(self):
             self.seen_resume = []
 
-        async def run(self, task, ctx):
-            self.seen_resume.append(task.resume)
+        async def run(self, contract, ctx):
+            self.seen_resume.append(contract.resume)
             yield AgentEvent("result", "done", raw={"session_id": "sess-xyz"})
 
     runner = _OneShot()
@@ -443,9 +565,9 @@ def test_compiled_history_injected_into_system_prompt(tmp_path):
     class CapturingRunner:
         tool = Tool.CLAUDE
 
-        async def run(self, task, ctx):
+        async def run(self, contract, ctx):
             captured_prompts.append(ctx.system_prompt)
-            yield AgentEvent("text", task.prompt)
+            yield AgentEvent("text", contract.prompt)
             yield AgentEvent("result", "done")
 
     async def go():

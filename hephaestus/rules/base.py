@@ -1,4 +1,9 @@
-"""Rule interface. Every built-in or custom rule implements `check`."""
+"""Rule interface. Every built-in or custom rule implements `check`.
+
+REUSABLE — the check interface user-authored rules (artifact predicates,
+behavioral constraints) implement. The hardcoded structural rules are gone; this
+contract is what the generic gate-runner executes.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

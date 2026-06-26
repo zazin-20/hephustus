@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hephaestus.identity import IdentityCard, default_capabilities, write_card
+from hephaestus.okf_layout import OKFLayout
 from hephaestus.store.db import connect, dumps_json, loads_json
 
 
@@ -127,7 +128,7 @@ def delete_profile(db_path: Path, agent_id: str, okf_root: Path | None = None) -
         conn.execute("DELETE FROM profiles WHERE agent_id = ?", (agent_id,))
         conn.commit()
     if okf_root is not None:
-        card_path = Path(okf_root) / "agents" / "identities" / f"{agent_id}.json"
+        card_path = OKFLayout.for_existing_root(okf_root).identity_card_path(agent_id)
         card_path.unlink(missing_ok=True)
 
 

@@ -1,3 +1,8 @@
+// REUSABLE — the node-level status surface. The row × stage-pill grid is exactly
+// the "PRD ✓, ADR ✓, issues ✓, handoff ✓, verified" feedback for user-authored
+// workflows (issue→workflow-node, the hardcoded stages→the workflow's gates).
+// Renders empty until a workflow/node model feeds `issues`. See
+// docs/design/governance-engine.md.
 import { StagePill, StateBadge } from './ui.jsx'
 
 const STAGES = [

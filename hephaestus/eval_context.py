@@ -1,4 +1,8 @@
-"""Unified evaluation context passed to every rule layer."""
+"""Unified evaluation context passed to every rule layer.
+
+REUSABLE — the object every check reads (okf documents, trace, contract, actor,
+scope). Provider-/rule-agnostic; user-authored gates read the same context.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

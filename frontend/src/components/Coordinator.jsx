@@ -87,13 +87,6 @@ function nextMockId(profiles, role) {
   return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
-function lineLabel(turn) {
-  if (turn.role === 'user') return 'user'
-  if (turn.kind === 'thinking') return 'think'
-  if (turn.kind === 'error') return 'err'
-  return 'agent'
-}
-
 async function copyToClipboard(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -162,7 +155,7 @@ export default function Coordinator() {
   useEffect(() => {
     onAgent((ev) => {
       if (ev.run_id !== activeRunId.current) return
-      if (ev.kind === 'done') {
+      if (ev.category === 'transport') {
         setSending(false)
         // loadThreadsFor reloads the persisted trace for the thread (full command
         // + output), replacing the lighter live entries.
@@ -177,7 +170,7 @@ export default function Coordinator() {
           })
         })
       }
-      if (ev.kind === 'tool_call') {
+      if (ev.category === 'tool') {
         setTraceEvents((current) => [
           ...current,
           {
@@ -193,9 +186,13 @@ export default function Coordinator() {
         ...current,
         {
           id: `${ev.run_id}-${current.length}`,
-          role: ev.kind === 'tool' || ev.kind === 'tool_call' ? 'tool' : 'assistant',
+          role: ev.transcript_role || 'assistant',
           kind: ev.kind,
           text: ev.text,
+          category: ev.category,
+          persist: ev.persist,
+          label: ev.label,
+          conversation: ev.conversation,
         },
       ])
     })
@@ -294,7 +291,7 @@ export default function Coordinator() {
     const text = conversationLines
       .map((turn) => {
         const body = (turn.text || '').trim() || `[${turn.kind || 'event'}]`
-        return `${lineLabel(turn)}: ${body}`
+        return `${turn.label || 'agent'}: ${body}`
       })
       .join('\n')
     if (!text) return
@@ -416,6 +413,10 @@ export default function Coordinator() {
         role: 'user',
         kind: 'text',
         text: message,
+        category: 'user',
+        persist: true,
+        label: 'user',
+        conversation: true,
       },
     ])
 
@@ -427,6 +428,10 @@ export default function Coordinator() {
           role: 'assistant',
           kind: 'text',
           text: `Preview mode: ${message}`,
+          category: 'content',
+          persist: true,
+          label: 'agent',
+          conversation: true,
         },
       ])
       setSending(false)
@@ -454,9 +459,7 @@ export default function Coordinator() {
   // Tool calls live in the Trace bucket; lifecycle envelopes (system/result) and
   // empty turns are dropped — they carry no content (the real reasoning is `thinking`).
   const conversationLines = transcript.filter((t) => {
-    if (t.role === 'user') return (t.text || '').trim()
-    if (t.role === 'tool' || t.kind === 'tool_call' || t.kind === 'tool') return false
-    if (!['text', 'thinking', 'error'].includes(t.kind)) return false
+    if (!t.conversation) return false
     return (t.text || '').trim()
   })
 
@@ -704,10 +707,10 @@ export default function Coordinator() {
                 {conversationLines.length ? (
                   conversationLines.map((turn) => {
                     const excluded = turn.included === false
-                    const isUser = turn.role === 'user'
-                    const isThinking = turn.kind === 'thinking'
-                    const isError = turn.kind === 'error'
-                    const label = lineLabel(turn)
+                    const isUser = turn.label === 'user'
+                    const isThinking = turn.category === 'thinking'
+                    const isError = turn.category === 'error'
+                    const label = turn.label || 'agent'
                     const labelTone = isUser
                       ? 'text-orange-500/70'
                       : isThinking

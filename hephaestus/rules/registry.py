@@ -1,8 +1,11 @@
 """Rule registry and runner.
 
-`run_rules` executes the structural rules; `run_all` also surfaces Tier-1 schema
-load errors collected while building the index, so a single call returns every
-problem in the tree.
+REUSABLE — the generic gate-runner. `run_rules` executes whatever rules it is
+given against a context; `run_all` also surfaces Tier-1 schema load errors, so a
+single call returns every problem in the tree. There is no built-in rule set
+anymore — callers pass the rules (e.g. user-authored artifact predicates, or
+`ALL_GOVERNANCE_RULES`). The hardcoded `S-001..S-006` default was removed when
+governance moved to user-authored specs. See docs/design/governance-engine.md.
 
 Both `run_all` and `run_rules` accept either an `OKFContext` or an
 `EvaluationContext`.  When passed a bare `OKFContext` they auto-wrap it so that
@@ -12,7 +15,6 @@ from __future__ import annotations
 
 from hephaestus.core import Violation
 from hephaestus.rules.base import HephaestusRule
-from hephaestus.rules.structural import ALL_STRUCTURAL_RULES
 
 
 def _ensure_eval_ctx(ctx):
@@ -31,7 +33,7 @@ def run_rules(
     enabled: set[str] | None = None,
 ) -> list[Violation]:
     eval_ctx = _ensure_eval_ctx(ctx)
-    rules = rules if rules is not None else ALL_STRUCTURAL_RULES
+    rules = rules if rules is not None else []
     out: list[Violation] = []
     for rule in rules:
         if enabled is not None and rule.id not in enabled:

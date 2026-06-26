@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from hephaestus.desktop import DesktopApp, PROJECT_ROOT
-from hephaestus.workspace import Workspace, discover_service_roots
+from hephaestus.okf_layout import OKFLayout
+from hephaestus.workspace import Workspace, discover_service_roots, scaffold_okf
 
 
 def _make_workspace(tmp_path: Path) -> Path:
@@ -34,6 +35,33 @@ def test_workspace_open_creates_operational_store(tmp_path):
     assert workspace.state_db_path == root.resolve() / ".hephaestus" / "state.db"
     assert workspace.state_db_path.exists()
     assert [path.name for path in workspace.service_roots] == ["service-a", "service-b"]
+
+
+def test_workspace_open_scaffolds_okf_tree(tmp_path):
+    root = tmp_path / "workspace"
+
+    Workspace.open(root)
+
+    assert (root / "agents" / "architect" / "issues").is_dir()
+    assert (root / "agents" / "architect" / "handoffs").is_dir()
+    assert (root / "agents" / "qa" / "evidence").is_dir()
+    assert (root / "agents" / "log").is_dir()
+    assert (root / "agents" / "identities").is_dir()
+    assert (root / "agents" / "archive").is_dir()
+    assert (root / "agents" / "architect" / "issues" / "index.md").exists()
+
+
+def test_scaffold_okf_accepts_agents_root_without_nesting_agents(tmp_path):
+    agents_root = tmp_path / "workspace" / "agents"
+    agents_root.mkdir(parents=True)
+
+    scaffold_okf(agents_root)
+
+    layout = OKFLayout.for_workspace(agents_root)
+    assert layout.agents_root == agents_root
+    assert (agents_root / "architect" / "issues").is_dir()
+    assert not (agents_root / "agents").exists()
+    assert (agents_root.parent / ".gitignore").exists()
 
 
 def test_workspace_open_accepts_explicit_service_roots(tmp_path):

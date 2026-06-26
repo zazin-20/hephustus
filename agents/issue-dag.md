@@ -3,31 +3,39 @@
 ## Current Open Sequence
 
 ```text
-#2  DONE
+#1  DONE
   |
-  -> #3  Threads + Runs + transcript
+  -> #2  DONE
        |
-       +-> #4  Client-owned compiled context + pruning
-       |
-       +-> #5  Trace capture + audit view
-             |
-             -> #6  EvaluationContext + unified rule engine
-                   |
-                   +-> #7  Execution Contract + hard governance + governance rules
-                   |
-                   +-> #8  Orchestrator handoff -> gated Spawn
-                         |
-                         -> #9  Compliance notifications + Correction Box
-                              (also depends on #7)
+       -> #3  DONE
+            |
+            -> #4  DONE
+                 |
+                 -> #5  DONE
+                      |
+                      -> #6  DONE
+                           |
+                           -> #7  DONE
+                                |
+                                -> #8  DONE
+                                     |
+                                     -> #9  DONE
+
+#10  Introduce an OKF-layout module
+#11  Normalize the agent-turn vocabulary and event taxonomy
+#12  Move run-construction out of the desktop shell into AgentService
+  |
+  -> #13  Make ExecutionContract the single run-config seam
+           (blocked by #12)
 ```
 
 ## Parallel Waves
 
-1. `#3` is the current critical path.
-2. After `#3`, run `#4` and `#5` in parallel.
-3. After `#5`, run `#6`.
-4. After `#6`, run `#7` and `#8` in parallel.
-5. After both `#7` and `#8`, run `#9`.
+1. `#10`, `#11`, and `#12` are the current open wave.
+2. `#10` is an independent locality refactor and can run in parallel with the others.
+3. `#11` is unblocked, but it is a deeper design seam and should stay coordinated with the run/execution work.
+4. `#12` is the critical-path implementation issue because it unblocks `#13`.
+5. After `#12`, run `#13`.
 
 ## Agent Ownership Rule
 
@@ -39,12 +47,9 @@
 
 ## Live GitHub Snapshot
 
-Open issues confirmed on `2026-06-22`:
+Open issues confirmed on `2026-06-23`:
 
-- `#3` `003 - Threads + Runs + transcript`
-- `#4` `004 - Client-owned compiled context + pruning`
-- `#5` `005 - Trace capture + audit view`
-- `#6` `006 - EvaluationContext + unified rule engine`
-- `#7` `007 - Execution Contract + hard governance + governance rules`
-- `#8` `008 - Orchestrator handoff -> gated Spawn`
-- `#9` `009 - Compliance notifications + Correction Box`
+- `#10` `Introduce an OKF-layout module — one home for the agents/ tree shape`
+- `#11` `Normalize the agent-turn vocabulary and concentrate the event taxonomy`
+- `#12` `Move run-construction out of the desktop shell into AgentService`
+- `#13` `Make ExecutionContract the single run-config seam (remove the bypass)`

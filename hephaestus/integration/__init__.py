@@ -8,6 +8,7 @@ The pure parts — routing, OKF context assembly, the session registry — are
 testable without any external dependency. The runner backends are thin, guarded
 adapters; an EchoRunner exercises the whole path offline.
 """
+from hephaestus.contract import ExecutionContract
 from hephaestus.integration.routing import (
     ROLE_DIRECTIVE,
     ROLE_TOOL,
@@ -29,6 +30,7 @@ from hephaestus.integration.service import AgentService, SessionRegistry, defaul
 
 __all__ = [
     "Role", "Tool", "tool_for", "ROLE_TOOL", "ROLE_DIRECTIVE",
+    "ExecutionContract",
     "SessionContext", "build_session_context",
     "AgentTask", "AgentEvent", "AgentRunner",
     "EchoRunner", "ClaudeRunner", "CodexRunner", "build_codex_argv",

@@ -7,18 +7,10 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from hephaestus.okf_layout import OKFLayout
 from hephaestus.store.db import connect
 
 _EXCLUDED_SERVICE_ROOTS = {"agents", "archive", "node_modules"}
-
-_OKF_DIRS = [
-    "agents/architect/issues",
-    "agents/architect/handoffs",
-    "agents/qa/evidence",
-    "agents/log",
-    "agents/identities",
-    "agents/archive",
-]
 
 _ISSUES_INDEX_TEMPLATE = textwrap.dedent("""\
     ---
@@ -35,20 +27,21 @@ def scaffold_okf(root: Path) -> bool:
     Returns True when the scaffold was written (first boot), False when the
     tree already existed and nothing was changed.
     """
-    agents_dir = root / "agents"
-    first_boot = not agents_dir.exists()
+    layout = OKFLayout.for_workspace(root)
+    workspace_root = layout.workspace_root
+    first_boot = not layout.agents_root.exists()
 
-    for rel in _OKF_DIRS:
-        (root / rel).mkdir(parents=True, exist_ok=True)
+    for directory in layout.required_directories():
+        directory.mkdir(parents=True, exist_ok=True)
 
-    index_path = root / "agents" / "architect" / "issues" / "index.md"
+    index_path = layout.issues_index_path()
     if not index_path.exists():
         index_path.write_text(
             _ISSUES_INDEX_TEMPLATE.format(today=date.today().isoformat()),
             encoding="utf-8",
         )
 
-    gitignore = root / ".gitignore"
+    gitignore = workspace_root / ".gitignore"
     marker = ".hephaestus/"
     if gitignore.exists():
         text = gitignore.read_text(encoding="utf-8")
@@ -108,8 +101,8 @@ class Workspace:
         roots = [self.root, *self.service_roots]
         seen: set[Path] = set()
         deduped: list[Path] = []
-        for root in roots:
-            if root not in seen:
-                seen.add(root)
-                deduped.append(root)
+        for candidate in roots:
+            if candidate not in seen:
+                seen.add(candidate)
+                deduped.append(candidate)
         return deduped

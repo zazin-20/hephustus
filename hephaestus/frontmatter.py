@@ -1,5 +1,9 @@
 """YAML frontmatter parsing for OKF markdown documents.
 
+REUSABLE — the artifact-spec layout (frontmatter scalars + named `## Sections`)
+parses through here; the predicate library checks against the result.
+
+
 Deliberately small and self-contained (uses PyYAML directly) so it can be swapped
 for the `python-frontmatter` package later without touching callers — see
 spec/architecture.md §8.

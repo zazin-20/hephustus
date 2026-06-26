@@ -1,4 +1,9 @@
-"""Handoff marker parsing and gated Spawn evaluation."""
+"""Handoff marker parsing and gated Spawn evaluation.
+
+REUSABLE — the transition-gate primitive. `evaluate_spawn_gate` / `SpawnCard`
+(GREEN/AMBER) is the gate-at-an-edge for the gatekeeper posture (choice A); its
+`exit_rules` become user-authored.
+"""
 from __future__ import annotations
 
 import json

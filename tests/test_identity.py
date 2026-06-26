@@ -9,6 +9,7 @@ from hephaestus.identity import (
     load_card,
     write_card,
 )
+from hephaestus.okf_layout import OKFLayout
 
 
 def test_write_card_creates_file(tmp_path):
@@ -73,6 +74,40 @@ def test_write_card_creates_directory(tmp_path):
     write_card(tmp_path, card)
 
     assert (tmp_path / "agents" / "identities").is_dir()
+
+
+def test_write_card_accepts_agents_root(tmp_path):
+    agents_root = tmp_path / "agents"
+    card = IdentityCard(
+        agent_id="orch-001",
+        name="Coordinator",
+        role="orchestrator",
+        created_at="2026-06-22T00:00:00Z",
+        capabilities=["write_handoff", "plan"],
+        sessions=[],
+    )
+
+    path = write_card(agents_root, card)
+
+    assert path == agents_root / "identities" / "orch-001.json"
+    assert path.exists()
+
+
+def test_load_card_accepts_agents_root(tmp_path):
+    agents_root = tmp_path / "agents"
+    card = IdentityCard(
+        agent_id="work-001",
+        name="Worker One",
+        role="worker",
+        created_at="2026-06-22T00:00:00Z",
+        capabilities=["write_code", "run_tests"],
+        sessions=[],
+    )
+
+    write_card(tmp_path, card)
+
+    assert load_card(agents_root, "work-001") == card
+    assert OKFLayout.for_existing_root(agents_root).identity_card_path("work-001").exists()
 
 
 def test_default_capabilities_by_role():

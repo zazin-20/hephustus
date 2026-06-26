@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hephaestus.integration.routing import ROLE_DIRECTIVE, Role
+from hephaestus.okf_layout import OKFLayout
 
 # Roles that operate against a specific issue spec.
 _ISSUE_CONSUMERS = {Role.WORKER, Role.QA, Role.ARCHITECT}
@@ -24,12 +25,12 @@ class SessionContext:
     system_prompt: str
 
 
-def _candidate_paths(agents: Path, role: Role, issue_id: str | None) -> list[Path]:
-    paths = [agents / ROLE_DIRECTIVE[role]]
+def _candidate_paths(layout: OKFLayout, role: Role, issue_id: str | None) -> list[Path]:
+    paths = [layout.resolve(ROLE_DIRECTIVE[role])]
     if issue_id and role in _ISSUE_CONSUMERS:
-        paths.append(agents / "architect" / "issues" / f"{issue_id}.md")
+        paths.append(layout.issue_path(issue_id))
     if role is Role.WORKER:
-        paths.append(agents / "worker" / "tdd.md")
+        paths.append(layout.worker_tdd_path())
     return paths
 
 
@@ -45,11 +46,11 @@ def _render(root: Path, files: list[Path]) -> str:
 
 
 def build_session_context(root: str | Path, role: Role | str, issue_id: str | None = None) -> SessionContext:
-    root = Path(root)
-    agents = root / "agents" if (root / "agents").is_dir() else root
+    render_root = Path(root)
+    layout = OKFLayout.for_existing_root(render_root)
     role = Role(role)
 
-    candidates = _candidate_paths(agents, role, issue_id)
+    candidates = _candidate_paths(layout, role, issue_id)
     files = [p for p in candidates if p.is_file()]
     missing = [p for p in candidates if not p.is_file()]
 
@@ -58,5 +59,5 @@ def build_session_context(root: str | Path, role: Role | str, issue_id: str | No
         issue_id=issue_id,
         files=files,
         missing=missing,
-        system_prompt=_render(root, files),
+        system_prompt=_render(render_root, files),
     )

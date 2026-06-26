@@ -1,5 +1,10 @@
 """Shared primitives used by both the validation pipeline and the rule engine.
 
+REUSABLE — gate-result vocabulary. `Severity` / `Violation` / `ViolationResult`
+are how every check (a user-authored artifact predicate, a governance rule, a
+schema load error) reports a failure. The whole engine speaks this.
+
+
 Kept dependency-free (no imports from models/index/rules) so everything else can
 import from here without creating cycles.
 """

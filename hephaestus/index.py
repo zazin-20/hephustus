@@ -1,109 +1,58 @@
 """The OKF index — a derived read cache over the `agents/` tree.
 
-`build_context` scans the tree once and produces an `OKFContext`, the view that
-every rule reads from. Rules never touch the disk directly, so the backing store
-can later become a SQLite cache (or a server store) without changing the rule
-interface. See spec/architecture.md §6.1.
+REUSABLE — generic artifact-store reader. `build_context` scans the tree and
+returns an `OKFContext` (parsed documents + schema load errors) that rules/gates
+read from; nothing here touches the issue-lifecycle. The hardcoded typed
+collections (issues/handoffs/qa/log) were removed when governance moved to
+user-authored specs — the scan→parse→collect-errors mechanism (and the
+disk-is-never-touched-by-rules property, spec/architecture.md §6.1) is what's
+kept. See docs/design/governance-engine.md.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic import BaseModel, ValidationError
-
 from hephaestus.core import Severity, Violation
-from hephaestus.frontmatter import FrontmatterError, load
-from hephaestus.models import (
-    Handoff,
-    IssuesIndex,
-    IssueSpec,
-    LogEntry,
-    QAEvidence,
-)
+from hephaestus.frontmatter import FrontmatterError, ParsedDocument, load
+from hephaestus.okf_layout import OKFLayout
 
 
 @dataclass
 class OKFContext:
+    """A read-only view of the OKF tree: parsed documents + schema load errors."""
+
     root: Path
-    issues: list[IssueSpec] = field(default_factory=list)
-    handoffs: list[Handoff] = field(default_factory=list)
-    log_entries: list[LogEntry] = field(default_factory=list)
-    qa_evidence: list[QAEvidence] = field(default_factory=list)
-    issues_index: IssuesIndex = field(default_factory=IssuesIndex)
+    documents: list[ParsedDocument] = field(default_factory=list)
     load_errors: list[Violation] = field(default_factory=list)
-
-    @property
-    def issue_ids(self) -> set[str]:
-        return {i.id for i in self.issues}
-
-
-def _load_collection(
-    directory: Path,
-    model: type[BaseModel],
-    errors: list[Violation],
-    skip: set[str] = frozenset(),
-) -> list:
-    items: list = []
-    if not directory.is_dir():
-        return items
-    for path in sorted(directory.glob("*.md")):
-        if path.name in skip:
-            continue
-        try:
-            doc = load(path)
-            items.append(model.model_validate(doc.frontmatter))
-        except (FrontmatterError, ValidationError) as exc:
-            errors.append(
-                Violation(
-                    rule_id="schema",
-                    severity=Severity.ERROR,
-                    message=f"{model.__name__} failed validation: {exc}",
-                    artifact=str(path),
-                    fix_hint="Fix the frontmatter to match the required schema for this doc type.",
-                )
-            )
-    return items
 
 
 def build_context(root: str | Path) -> OKFContext:
-    """Build an OKFContext from a repo root or an `agents/` directory directly."""
+    """Build an OKFContext from a repo root or an `agents/` directory directly.
+
+    Every markdown file under the agents tree is parsed for frontmatter. Files with
+    no frontmatter fence are kept as all-body documents (not errors); only a
+    malformed frontmatter fence becomes a `schema` load error.
+    """
     root = Path(root)
-    agents = root / "agents" if (root / "agents").is_dir() else root
+    layout = OKFLayout.for_existing_root(root)
+    documents: list[ParsedDocument] = []
     errors: list[Violation] = []
 
-    issues_dir = agents / "architect" / "issues"
-    handoffs_dir = agents / "architect" / "handoffs"
-    qa_dir = agents / "qa" / "evidence"
-    log_dir = agents / "log"
-
-    issues = _load_collection(issues_dir, IssueSpec, errors, skip={"index.md"})
-    handoffs = _load_collection(handoffs_dir, Handoff, errors)
-    qa_evidence = _load_collection(qa_dir, QAEvidence, errors)
-    log_entries = _load_collection(log_dir, LogEntry, errors)
-
-    issues_index = IssuesIndex()
-    index_path = issues_dir / "index.md"
-    if index_path.is_file():
-        try:
-            issues_index = IssuesIndex.model_validate(load(index_path).frontmatter)
-        except (FrontmatterError, ValidationError) as exc:
-            errors.append(
-                Violation(
-                    rule_id="schema",
-                    severity=Severity.ERROR,
-                    message=f"IssuesIndex failed validation: {exc}",
-                    artifact=str(index_path),
-                    fix_hint="Fix the index frontmatter (title, updated, open_issues).",
+    agents = layout.agents_root
+    if agents.is_dir():
+        for path in sorted(agents.rglob("*.md")):
+            try:
+                documents.append(load(path))
+            except FrontmatterError as exc:
+                errors.append(
+                    Violation(
+                        rule_id="schema",
+                        severity=Severity.ERROR,
+                        message=str(exc),
+                        artifact=str(path),
+                        fix_hint="Fix the frontmatter so it is a valid, terminated YAML mapping.",
+                    )
                 )
-            )
 
-    return OKFContext(
-        root=root,
-        issues=issues,
-        handoffs=handoffs,
-        log_entries=log_entries,
-        qa_evidence=qa_evidence,
-        issues_index=issues_index,
-        load_errors=errors,
-    )
+    return OKFContext(root=root, documents=documents, load_errors=errors)

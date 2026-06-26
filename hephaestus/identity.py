@@ -6,6 +6,8 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from hephaestus.okf_layout import OKFLayout
+
 
 @dataclass(slots=True)
 class IdentityCard:
@@ -49,4 +51,4 @@ def append_session(okf_root: Path, agent_id: str, session: dict) -> None:
 
 
 def _card_path(okf_root: Path, agent_id: str) -> Path:
-    return Path(okf_root) / "agents" / "identities" / f"{agent_id}.json"
+    return OKFLayout.for_existing_root(okf_root).identity_card_path(agent_id)

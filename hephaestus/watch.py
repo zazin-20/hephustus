@@ -1,5 +1,9 @@
 """Watchdog-driven validation pipeline (spec/architecture.md §5.4).
 
+REUSABLE — rule-agnostic change→debounce→re-evaluate pipeline. Detecting artifact
+writes and re-running gates is exactly what user-authored workflows need.
+
+
 Layering:
 
     watchdog observer (its own thread)
@@ -19,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from hephaestus.monitor import ComplianceMonitor, ViolationDelta
+from hephaestus.okf_layout import OKFLayout
 
 try:
     from watchdog.events import FileSystemEventHandler
@@ -83,6 +88,7 @@ class OKFWatcher:
         enabled: set[str] | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
     ):
+        self._layout = OKFLayout.for_existing_root(root)
         self.monitor = ComplianceMonitor(root, enabled=enabled)
         self._root = Path(root)
         self._on_change = on_change
@@ -92,8 +98,7 @@ class OKFWatcher:
         self._debouncer: AsyncDebouncer | None = None
 
     def _watch_dir(self) -> Path:
-        agents = self._root / "agents"
-        return agents if agents.is_dir() else self._root
+        return self._layout.agents_root
 
     async def start(self) -> ViolationDelta:
         """Emit a baseline delta, then begin watching. Returns the baseline."""

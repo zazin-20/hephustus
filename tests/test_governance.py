@@ -4,6 +4,8 @@ from __future__ import annotations
 import pytest
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.index import OKFContext, build_context
+from hephaestus.core import ViolationResult
+from hephaestus.rules.base import HephaestusRule
 from hephaestus.rules.governance import G001ScopeAdherence, G002ModelCompliance, ALL_GOVERNANCE_RULES
 from hephaestus.rules.registry import run_layer
 from hephaestus.store.trace import TraceEvent
@@ -144,7 +146,16 @@ def test_governance_rules_have_layer_governance():
 def test_run_layer_governance_filters(tmp_path):
     okf = _okf(tmp_path)
     ctx = EvaluationContext(okf=okf, trace=[], contract={}, actor="work-001")
-    from hephaestus.rules.structural import ALL_STRUCTURAL_RULES
-    all_rules = ALL_STRUCTURAL_RULES + ALL_GOVERNANCE_RULES
+
+    # A non-governance rule must be filtered out by run_layer(..., layer="governance").
+    class _OtherLayerRule(HephaestusRule):
+        id = "T-OTHER"
+        name = "other layer"
+        layer = "structural"
+
+        def check(self, ctx):
+            return ViolationResult.of([])
+
+    all_rules = [_OtherLayerRule(), *ALL_GOVERNANCE_RULES]
     result = run_layer(all_rules, ctx, layer="governance")
     assert isinstance(result, list)

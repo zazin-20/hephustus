@@ -18,8 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Protocol, runtime_checkable
 
+from hephaestus.contract import ExecutionContract
+from hephaestus.integration.adapters import claude_flags, codex_flags
 from hephaestus.integration.context import SessionContext
 from hephaestus.integration.routing import Role, Tool
+from hephaestus.integration.turns import turn_payload
 
 try:
     import claude_agent_sdk as claude_sdk
@@ -44,16 +47,34 @@ class AgentTask:
 
 @dataclass(frozen=True)
 class AgentEvent:
-    kind: str            # "system" | "text" | "tool" | "result" | "error"
+    kind: str
     text: str
     raw: dict | None = None
+    category: str | None = None
+    persist: bool | None = None
+    transcript_role: str | None = None
+    label: str | None = None
+    conversation: bool | None = None
+
+    def __post_init__(self) -> None:
+        payload = turn_payload(self.kind, text=self.text)
+        if self.category is None:
+            object.__setattr__(self, "category", payload["category"])
+        if self.persist is None:
+            object.__setattr__(self, "persist", payload["persist"])
+        if self.transcript_role is None:
+            object.__setattr__(self, "transcript_role", payload["transcript_role"])
+        if self.label is None:
+            object.__setattr__(self, "label", payload["label"])
+        if self.conversation is None:
+            object.__setattr__(self, "conversation", payload["conversation"])
 
 
 @runtime_checkable
 class AgentRunner(Protocol):
     tool: Tool
 
-    def run(self, task: AgentTask, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
+    def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
         ...
 
 
@@ -67,24 +88,24 @@ class EchoRunner:
     def __init__(self, tool: Tool = Tool.CLAUDE):
         self.tool = tool
 
-    async def run(self, task: AgentTask, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
-        yield AgentEvent("system", f"[echo:{self.tool.value}] role={task.role.value} issue={task.issue_id}")
-        if task.model or task.effort:
-            yield AgentEvent("system", f"model={task.model} effort={task.effort}")
-        if task.resume:
-            yield AgentEvent("system", f"resume={task.resume}")
+    async def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
+        yield AgentEvent("system", f"[echo:{self.tool.value}] role={contract.role} issue={contract.issue_id}")
+        if contract.model or contract.effort:
+            yield AgentEvent("system", f"model={contract.model} effort={contract.effort}")
+        if contract.resume:
+            yield AgentEvent("system", f"resume={contract.resume}")
         yield AgentEvent("system", f"context files: {[p.name for p in ctx.files]}")
         if ctx.missing:
             yield AgentEvent("system", f"missing: {[p.name for p in ctx.missing]}")
-        yield AgentEvent("text", task.prompt)
-        yield AgentEvent("result", "ok")
+        yield AgentEvent("text", contract.prompt)
+        yield AgentEvent("result", "ok", raw={"actual_model": contract.model})
 
 
 # --------------------------------------------------------------------------- #
 # Claude (claude-agent-sdk)
 # --------------------------------------------------------------------------- #
 
-def _claude_options(ctx: SessionContext, task: AgentTask):
+def _claude_options(ctx: SessionContext, contract: ExecutionContract):
     """Build ClaudeAgentOptions, passing only fields the installed SDK supports.
 
     The OKF directive/context is injected via `system_prompt` using the
@@ -101,14 +122,18 @@ def _claude_options(ctx: SessionContext, task: AgentTask):
         }
     if "setting_sources" in fields:
         kwargs["setting_sources"] = ["project"]
-    if "cwd" in fields and task.cwd:
-        kwargs["cwd"] = str(task.cwd)
-    if "model" in fields and task.model:
-        kwargs["model"] = task.model
-    if "effort" in fields and task.effort:
-        kwargs["effort"] = task.effort
-    if "resume" in fields and task.resume:
-        kwargs["resume"] = task.resume
+    adapter_flags = claude_flags(contract)
+    for field_name, value in (
+        ("cwd", adapter_flags.get("cwd")),
+        ("permission_mode", adapter_flags.get("permission_mode")),
+        ("allowed_tools", adapter_flags.get("allowed_tools")),
+        ("disallowed_tools", adapter_flags.get("disallowed_tools")),
+        ("model", contract.model),
+        ("effort", contract.effort),
+        ("resume", contract.resume),
+    ):
+        if field_name in fields and value not in (None, [], ""):
+            kwargs[field_name] = value
     return claude_sdk.ClaudeAgentOptions(**kwargs)
 
 
@@ -178,11 +203,11 @@ def _claude_event(msg) -> AgentEvent | list[AgentEvent]:
 class ClaudeRunner:
     tool = Tool.CLAUDE
 
-    async def run(self, task: AgentTask, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
+    async def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
         if not HAS_CLAUDE_SDK:
             raise RuntimeError("claude-agent-sdk not installed; run: pip install -e .[agents]")
-        options = _claude_options(ctx, task)
-        async for msg in claude_sdk.query(prompt=task.prompt, options=options):
+        options = _claude_options(ctx, contract)
+        async for msg in claude_sdk.query(prompt=contract.prompt, options=options):
             result = _claude_event(msg)
             if isinstance(result, list):
                 for ev in result:
@@ -195,21 +220,24 @@ class ClaudeRunner:
 # Codex (`codex exec`)
 # --------------------------------------------------------------------------- #
 
-def build_codex_argv(task: AgentTask, *, output_file: str | None = None, jsonl: bool = True) -> list[str]:
+def build_codex_argv(contract: ExecutionContract, *, output_file: str | None = None, jsonl: bool = True) -> list[str]:
     """Pure: the `codex` args (without the executable prefix). Easy to unit-test."""
+    flags = codex_flags(contract)
     argv = ["exec", "--skip-git-repo-check"]
     if jsonl:
         argv.append("--json")
     if output_file:
         argv += ["-o", output_file]
-    if task.cwd:
-        argv += ["-C", str(task.cwd)]
-    if task.model:
-        argv += ["-m", task.model]
-    if task.effort:
+    if flags.get("working_dir"):
+        argv += ["-C", str(flags["working_dir"])]
+    if contract.model:
+        argv += ["-m", contract.model]
+    if contract.effort:
         # `codex exec -c key=value` overrides config.toml; value is parsed as TOML.
-        argv += ["-c", f'model_reasoning_effort="{task.effort}"']
-    argv.append(task.prompt)
+        argv += ["-c", f'model_reasoning_effort="{contract.effort}"']
+    argv += ["-c", f'sandbox_mode="{"workspace-write" if flags.get("sandbox", True) else "danger-full-access"}"']
+    argv += ["-c", f'approval_policy="{flags.get("approval_policy", "auto")}"']
+    argv.append(contract.prompt)
     return argv
 
 
@@ -321,8 +349,8 @@ def _decode_codex_line(raw_line: bytes) -> AgentEvent | None:
 class CodexRunner:
     tool = Tool.CODEX
 
-    async def run(self, task: AgentTask, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
-        cmd = _codex_command() + build_codex_argv(task)
+    async def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
+        cmd = _codex_command() + build_codex_argv(contract)
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
@@ -351,9 +379,17 @@ class CodexRunner:
                 raw_line, buffer = buffer.split(b"\n", 1)
                 event = _decode_codex_line(raw_line)
                 if event is not None:
+                    if event.kind == "result":
+                        raw = dict(event.raw or {})
+                        raw.setdefault("actual_model", contract.model)
+                        event = AgentEvent(event.kind, event.text, raw=raw)
                     yield event
         event = _decode_codex_line(buffer)
         if event is not None:
+            if event.kind == "result":
+                raw = dict(event.raw or {})
+                raw.setdefault("actual_model", contract.model)
+                event = AgentEvent(event.kind, event.text, raw=raw)
             yield event
 
         await proc.wait()
