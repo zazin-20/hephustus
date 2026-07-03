@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import AsyncIterator
 from uuid import uuid4
 
-from hephaestus.catalog import provider_for_model
 from hephaestus.contract import ExecutionContract
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.index import build_context
 from hephaestus.integration.context import SessionContext, build_session_context
-from hephaestus.integration.routing import Tool, tool_for_provider
+from hephaestus.integration.providers import ProviderRegistry, provider_key, provider_registry
+from hephaestus.integration.routing import Tool
 from hephaestus.integration.runners import (
     AgentEvent,
     AgentRunner,
@@ -41,26 +41,43 @@ class PreparedRun:
     node_id: str
     thread_id: str
     run_id: str
-    tool: Tool
+    tool: Tool | str
     ctx: SessionContext
 
 
-def default_runners() -> dict[Tool, AgentRunner]:
-    return {Tool.CLAUDE: ClaudeRunner(), Tool.CODEX: CodexRunner()}
+def _display_tool(provider: str) -> Tool | str:
+    try:
+        return Tool(provider)
+    except ValueError:
+        return provider
+
+
+def _normalize_runners(runners: dict[Tool | str, AgentRunner]) -> dict[str, AgentRunner]:
+    return {provider_key(key): runner for key, runner in runners.items()}
+
+
+def default_runners(registry: ProviderRegistry | None = None) -> dict[str, AgentRunner]:
+    return (registry or provider_registry()).runners()
 
 
 class AgentService:
-    def __init__(self, root: str | Path, runners: dict[Tool, AgentRunner] | None = None):
+    def __init__(
+        self,
+        root: str | Path,
+        runners: dict[Tool | str, AgentRunner] | None = None,
+        registry: ProviderRegistry | None = None,
+    ):
         self.root = Path(root).resolve()
         self.state_db_path = self.root / ".hephaestus" / "state.db"
-        self.runners = runners or default_runners()
+        self.provider_registry = registry or provider_registry()
+        self.runners = _normalize_runners(runners) if runners is not None else default_runners(self.provider_registry)
         self._locks: dict[str, asyncio.Lock] = {}
         interrupt_running_runs(self.state_db_path)
 
-    def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[Tool, SessionContext]:
+    def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[Tool | str, SessionContext]:
         resolved = node or self._resolve_node(task)
-        provider = provider_for_model(task.model) or task.provider or resolved.provider
-        tool = tool_for_provider(provider)
+        provider = self.provider_registry.provider_for_model(task.model) or task.provider or resolved.provider
+        tool = _display_tool(provider)
         ctx = build_session_context(
             self.root,
             node_id=resolved.node_id,
@@ -232,7 +249,7 @@ class AgentService:
     async def run(self, work: AgentTask | PreparedRun) -> AsyncIterator[AgentEvent]:
         prepared = work if isinstance(work, PreparedRun) else self.begin(work)
         contract = prepared.contract
-        runner = self.runners[prepared.tool]
+        runner = self.runners[provider_key(prepared.tool)]
         lock = self._locks.setdefault(prepared.node_id, asyncio.Lock())
         usage = None
         actual_model = contract.actual_model
@@ -295,7 +312,7 @@ class AgentService:
         if task.node_id:
             return get_node(self.state_db_path, task.node_id)
 
-        provider = provider_for_model(task.model) or task.provider
+        provider = self.provider_registry.provider_for_model(task.model) or task.provider
         if not provider:
             raise ValueError("provider is required when no node_id is supplied")
         name = " ".join(part.title() for part in (task.tags or [provider]))
@@ -315,7 +332,7 @@ class AgentService:
         self,
         node: Node,
         task: AgentTask,
-        tool: Tool,
+        tool: Tool | str,
         *,
         context: str,
         workflow_id: str | None,
@@ -328,7 +345,7 @@ class AgentService:
             scope = f"workflow:{workflow_id}/placement:{placement_id}"
         else:
             scope = f"node:{node.node_id}"
-        provider = provider_for_model(model) or task.provider or node.provider
+        provider = self.provider_registry.provider_for_model(model) or task.provider or node.provider
         return ExecutionContract(
             actor=node.node_id,
             node_id=node.node_id,
@@ -340,7 +357,7 @@ class AgentService:
             effort=effort,
             tools=list(node.allowed_tools),
             prompt=task.prompt,
-            tool=tool.value,
+            tool=provider_key(tool),
             issue_id=task.issue_id,
             cwd=str(task.cwd) if task.cwd else node.working_dir,
             workflow_id=workflow_id,
@@ -402,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         effort=args.effort,
     )
     tool, ctx = service.resolve(task)
-    print(f"-> provider={task.provider}  tool={tool.value}  context={[p.name for p in ctx.files]}")
+    print(f"-> provider={task.provider}  tool={getattr(tool, 'value', tool)}  context={[p.name for p in ctx.files]}")
     if ctx.missing:
         print(f"  (missing OKF files: {[p.name for p in ctx.missing]})")
 

@@ -302,7 +302,7 @@ class DesktopApp:
             "node_id": prepared.node_id,
             "provider": prepared.task.provider,
             "tags": prepared.task.tags,
-            "tool": prepared.tool.value,
+            "tool": getattr(prepared.tool, "value", prepared.tool),
             "context": [p.name for p in prepared.ctx.files],
             "missing": [p.name for p in prepared.ctx.missing],
         }

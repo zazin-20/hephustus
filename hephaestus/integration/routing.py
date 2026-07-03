@@ -5,6 +5,8 @@ from enum import Enum
 
 
 class Tool(str, Enum):
+    """Compatibility enum for built-in providers."""
+
     CLAUDE = "claude"
     CODEX = "codex"
 
