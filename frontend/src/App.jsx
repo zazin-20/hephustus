@@ -27,7 +27,7 @@ function AppInner() {
           severity: v.severity || 'warning',
           rule_id: v.rule_id,
           issue_id: v.issue_id || null,
-          agent_id: v.agent_id || null,
+          node_id: v.node_id || null,
           message: v.message,
         })
       }

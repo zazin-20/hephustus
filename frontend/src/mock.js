@@ -74,7 +74,7 @@ export const CODE_MOCK = {
     },
     'hephaestus/models.py': {
       language: 'python', size: 88, binary: false, truncated: false,
-      content: 'class IssueSpec(OKFModel):\n    id: str\n    status: IssueStatus\n    role: str\n    sprint: str',
+      content: 'class NodeSpec(OKFModel):\n    id: str\n    tags: list[str]\n    provider: str\n    sprint: str',
     },
     'hephaestus/rules/structural.py': {
       language: 'python', size: 70, binary: false, truncated: false,
@@ -117,9 +117,10 @@ export const RULES_MOCK = [
 
 export const COORDINATOR_MOCK = [
   {
-    agent_id: 'arch-001',
+    node_id: 'node-001',
     name: 'Systems Architect',
-    role: 'architect',
+    provider: 'claude',
+    tags: ['architect', 'design'],
     rules: ['S-001', 'S-002'],
     model: 'claude-opus',
     effort: 'high',
@@ -128,9 +129,10 @@ export const COORDINATOR_MOCK = [
     status: 'idle',
   },
   {
-    agent_id: 'work-001',
+    node_id: 'node-002',
     name: 'Implementation Worker',
-    role: 'worker',
+    provider: 'codex',
+    tags: ['worker', 'frontend'],
     rules: ['TDD', 'lint'],
     model: 'gpt-5',
     effort: 'medium',
@@ -139,9 +141,10 @@ export const COORDINATOR_MOCK = [
     status: 'idle',
   },
   {
-    agent_id: 'qa-001',
+    node_id: 'node-003',
     name: 'Evidence QA',
-    role: 'qa',
+    provider: 'claude',
+    tags: ['qa'],
     rules: ['QA-Checklist'],
     model: null,
     effort: 'low',

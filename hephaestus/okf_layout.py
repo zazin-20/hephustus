@@ -93,8 +93,8 @@ class OKFLayout:
     def log_entry_path(self, issue_id: str) -> Path:
         return self.log_dir / f"{issue_id}.md"
 
-    def identity_card_path(self, agent_id: str) -> Path:
-        return self.identities_dir / f"{agent_id}.json"
+    def identity_card_path(self, node_id: str) -> Path:
+        return self.identities_dir / f"{node_id}.json"
 
     def worker_tdd_path(self) -> Path:
         return self.worker_dir / "tdd.md"

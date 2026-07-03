@@ -39,9 +39,17 @@ export async function readFile(repo, relpath) {
 }
 
 // --- Agents (§5) ---
-export async function runAgent(role, prompt, issue, cwd, model) {
+export async function runAgent(provider, tags, prompt, issue, cwd, model, effort = null) {
   if (window.pywebview?.api?.run_agent) {
-    return await window.pywebview.api.run_agent(role, prompt, issue || null, cwd || null, model || null)
+    return await window.pywebview.api.run_agent(
+      provider,
+      tags,
+      prompt,
+      issue || null,
+      cwd || null,
+      model || null,
+      effort || null,
+    )
   }
   return null
 }
@@ -83,17 +91,18 @@ export async function pickDirectory() {
   return null
 }
 
-// --- Coordinator / profiles ---
-export async function listProfiles() {
-  if (window.pywebview?.api?.list_profiles) return await window.pywebview.api.list_profiles()
+// --- Coordinator / nodes ---
+export async function listNodes() {
+  if (window.pywebview?.api?.list_nodes) return await window.pywebview.api.list_nodes()
   return null
 }
 
-export async function createProfile(name, role, rules, model, effort, workingDir) {
-  if (window.pywebview?.api?.create_profile) {
-    return await window.pywebview.api.create_profile(
+export async function createNode(name, provider, tags, rules, model, effort, workingDir) {
+  if (window.pywebview?.api?.create_node) {
+    return await window.pywebview.api.create_node(
       name,
-      role,
+      provider,
+      tags,
       rules,
       model || null,
       effort || null,
@@ -103,9 +112,9 @@ export async function createProfile(name, role, rules, model, effort, workingDir
   return null
 }
 
-export async function deleteProfile(agentId) {
-  if (window.pywebview?.api?.delete_profile) {
-    return await window.pywebview.api.delete_profile(agentId)
+export async function deleteNode(nodeId) {
+  if (window.pywebview?.api?.delete_node) {
+    return await window.pywebview.api.delete_node(nodeId)
   }
   return null
 }
@@ -116,9 +125,9 @@ export async function setTurnIncluded(turnId, included) {
   return null
 }
 
-export async function getTrace(runId, agentId, threadId) {
+export async function getTrace(runId, nodeId, threadId) {
   if (window.pywebview?.api?.get_trace)
-    return await window.pywebview.api.get_trace(runId || null, agentId || null, threadId || null)
+    return await window.pywebview.api.get_trace(runId || null, nodeId || null, threadId || null)
   return []
 }
 
@@ -136,14 +145,14 @@ export async function evaluateSpawn(role, task, issueId) {
 }
 
 // --- Corrections ---
-export async function saveCorrection(violationId, agentId, issueId, note) {
+export async function saveCorrection(violationId, nodeId, issueId, note) {
   if (window.pywebview?.api?.save_correction)
-    return await window.pywebview.api.save_correction(violationId, agentId, issueId, note)
+    return await window.pywebview.api.save_correction(violationId, nodeId, issueId, note)
   return null
 }
 
-export async function getCorrections(agentId, issueId) {
+export async function getCorrections(nodeId, issueId) {
   if (window.pywebview?.api?.get_corrections)
-    return await window.pywebview.api.get_corrections(agentId || null, issueId || null)
+    return await window.pywebview.api.get_corrections(nodeId || null, issueId || null)
   return []
 }

@@ -12,8 +12,11 @@ from hephaestus.store.db import connect
 @dataclass(slots=True)
 class Thread:
     id: str
-    agent_id: str
+    node_id: str
     name: str
+    workflow_id: str | None
+    workflow_run_id: str | None
+    placement_id: str | None
     issue_id: str | None
     created_at: str
     updated_at: str
@@ -35,21 +38,27 @@ class Turn:
 def get_or_create_thread(
     db_path,
     *,
-    agent_id: str,
+    node_id: str,
     name: str,
+    workflow_id: str | None = None,
+    workflow_run_id: str | None = None,
+    placement_id: str | None = None,
     issue_id: str | None = None,
 ) -> Thread:
     with connect(db_path) as conn:
         row = conn.execute(
             """
-            SELECT id, agent_id, name, issue_id, created_at, updated_at
+            SELECT id, node_id, name, workflow_id, workflow_run_id, placement_id, issue_id, created_at, updated_at
             FROM threads
-            WHERE agent_id = ?
+            WHERE node_id = ?
+              AND COALESCE(workflow_id, '') = COALESCE(?, '')
+              AND COALESCE(workflow_run_id, '') = COALESCE(?, '')
+              AND COALESCE(placement_id, '') = COALESCE(?, '')
               AND ((issue_id IS NULL AND ? IS NULL AND name = ?) OR issue_id = ?)
             ORDER BY created_at ASC
             LIMIT 1
             """,
-            (agent_id, issue_id, name, issue_id),
+            (node_id, workflow_id, workflow_run_id, placement_id, issue_id, name, issue_id),
         ).fetchone()
         if row is not None:
             updated_at = _utc_now()
@@ -60,30 +69,41 @@ def get_or_create_thread(
             conn.commit()
             return Thread(
                 id=row[0],
-                agent_id=row[1],
+                node_id=row[1],
                 name=row[2],
-                issue_id=row[3],
-                created_at=row[4],
+                workflow_id=row[3],
+                workflow_run_id=row[4],
+                placement_id=row[5],
+                issue_id=row[6],
+                created_at=row[7],
                 updated_at=updated_at,
             )
 
         thread = Thread(
             id=_new_id(),
-            agent_id=agent_id,
+            node_id=node_id,
             name=name,
+            workflow_id=workflow_id,
+            workflow_run_id=workflow_run_id,
+            placement_id=placement_id,
             issue_id=issue_id,
             created_at=_utc_now(),
             updated_at=_utc_now(),
         )
         conn.execute(
             """
-            INSERT INTO threads(id, agent_id, name, issue_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO threads(
+                id, node_id, name, workflow_id, workflow_run_id, placement_id, issue_id, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 thread.id,
-                thread.agent_id,
+                thread.node_id,
                 thread.name,
+                thread.workflow_id,
+                thread.workflow_run_id,
+                thread.placement_id,
                 thread.issue_id,
                 thread.created_at,
                 thread.updated_at,
@@ -184,25 +204,28 @@ def set_included(db_path, turn_id: str, included: bool) -> None:
         conn.commit()
 
 
-def list_threads(db_path, agent_id: str) -> list[Thread]:
+def list_threads(db_path, node_id: str) -> list[Thread]:
     with connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT id, agent_id, name, issue_id, created_at, updated_at
+            SELECT id, node_id, name, workflow_id, workflow_run_id, placement_id, issue_id, created_at, updated_at
             FROM threads
-            WHERE agent_id = ?
+            WHERE node_id = ?
             ORDER BY updated_at DESC, created_at DESC
             """,
-            (agent_id,),
+            (node_id,),
         ).fetchall()
     return [
         Thread(
             id=row[0],
-            agent_id=row[1],
+            node_id=row[1],
             name=row[2],
-            issue_id=row[3],
-            created_at=row[4],
-            updated_at=row[5],
+            workflow_id=row[3],
+            workflow_run_id=row[4],
+            placement_id=row[5],
+            issue_id=row[6],
+            created_at=row[7],
+            updated_at=row[8],
         )
         for row in rows
     ]
@@ -211,11 +234,14 @@ def list_threads(db_path, agent_id: str) -> list[Thread]:
 def _row_to_thread(row) -> Thread:
     return Thread(
         id=row[0],
-        agent_id=row[1],
+        node_id=row[1],
         name=row[2],
-        issue_id=row[3],
-        created_at=row[4],
-        updated_at=row[5],
+        workflow_id=row[3],
+        workflow_run_id=row[4],
+        placement_id=row[5],
+        issue_id=row[6],
+        created_at=row[7],
+        updated_at=row[8],
     )
 
 

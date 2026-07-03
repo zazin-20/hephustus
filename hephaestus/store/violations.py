@@ -21,7 +21,7 @@ def append_violation(
     violation: Violation,
     *,
     run_id: str,
-    agent_id: str,
+    node_id: str,
     issue_id: str | None = None,
 ) -> int:
     row_id_holder: list[int] = []
@@ -29,7 +29,7 @@ def append_violation(
     db.execute(
         """
         INSERT INTO violations(id, rule_id, layer, severity, message, artifact,
-                               run_id, agent_id, issue_id, fix_hint, created_at)
+                               run_id, node_id, issue_id, fix_hint, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
@@ -40,7 +40,7 @@ def append_violation(
             violation.message,
             violation.artifact or "",
             run_id,
-            agent_id,
+            node_id,
             issue_id,
             violation.fix_hint or "",
             _utc_now(),
@@ -55,21 +55,21 @@ def list_violations(
     db: sqlite3.Connection,
     *,
     run_id: str | None = None,
-    agent_id: str | None = None,
+    node_id: str | None = None,
 ) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if run_id is not None:
         clauses.append("run_id = ?")
         params.append(run_id)
-    if agent_id is not None:
-        clauses.append("agent_id = ?")
-        params.append(agent_id)
+    if node_id is not None:
+        clauses.append("node_id = ?")
+        params.append(node_id)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = db.execute(
         f"""
         SELECT id, rule_id, layer, severity, message, artifact,
-               run_id, agent_id, issue_id, fix_hint, created_at
+               run_id, node_id, issue_id, fix_hint, created_at
         FROM violations
         {where}
         ORDER BY created_at ASC
@@ -77,5 +77,5 @@ def list_violations(
         params,
     ).fetchall()
     keys = ("id", "rule_id", "layer", "severity", "message", "artifact",
-            "run_id", "agent_id", "issue_id", "fix_hint", "created_at")
+            "run_id", "node_id", "issue_id", "fix_hint", "created_at")
     return [dict(zip(keys, row)) for row in rows]

@@ -11,26 +11,33 @@ from hephaestus.okf_layout import OKFLayout
 
 @dataclass(slots=True)
 class IdentityCard:
-    agent_id: str
+    node_id: str
     name: str
-    role: str
+    tags: list[str]
     created_at: str
     capabilities: list[str]
     sessions: list[dict]
 
 
-def default_capabilities(role: str) -> list[str]:
+def default_capabilities(tags: list[str] | str) -> list[str]:
+    tag_list = [tags] if isinstance(tags, str) else list(tags)
     mapping = {
         "architect": ["write_spec", "write_handoff"],
         "worker": ["write_code", "run_tests"],
         "qa": ["write_qa_evidence"],
-        "orchestrator": ["write_handoff", "plan"],
+        "orchestrator": ["plan", "write_handoff"],
+        "planner": ["plan"],
     }
-    return list(mapping.get(role, []))
+    capabilities: list[str] = []
+    for tag in tag_list:
+        for capability in mapping.get(tag, []):
+            if capability not in capabilities:
+                capabilities.append(capability)
+    return capabilities
 
 
 def write_card(okf_root: Path, card: IdentityCard) -> Path:
-    path = _card_path(okf_root, card.agent_id)
+    path = _card_path(okf_root, card.node_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(asdict(card), indent=2, ensure_ascii=False) + "\n",
@@ -39,16 +46,16 @@ def write_card(okf_root: Path, card: IdentityCard) -> Path:
     return path
 
 
-def load_card(okf_root: Path, agent_id: str) -> IdentityCard:
-    payload = json.loads(_card_path(okf_root, agent_id).read_text(encoding="utf-8"))
+def load_card(okf_root: Path, node_id: str) -> IdentityCard:
+    payload = json.loads(_card_path(okf_root, node_id).read_text(encoding="utf-8"))
     return IdentityCard(**payload)
 
 
-def append_session(okf_root: Path, agent_id: str, session: dict) -> None:
-    card = load_card(okf_root, agent_id)
+def append_session(okf_root: Path, node_id: str, session: dict) -> None:
+    card = load_card(okf_root, node_id)
     card.sessions.append(session)
     write_card(okf_root, card)
 
 
-def _card_path(okf_root: Path, agent_id: str) -> Path:
-    return OKFLayout.for_existing_root(okf_root).identity_card_path(agent_id)
+def _card_path(okf_root: Path, node_id: str) -> Path:
+    return OKFLayout.for_existing_root(okf_root).identity_card_path(node_id)

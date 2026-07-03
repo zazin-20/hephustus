@@ -8,11 +8,11 @@ import pytest
 
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.context import SessionContext, build_session_context
-from hephaestus.integration.routing import Role, Tool, tool_for
+from hephaestus.integration.routing import Tool, tool_for_provider
 from hephaestus.integration.runners import AgentEvent, AgentTask, EchoRunner, build_codex_argv
-from hephaestus.integration.service import AgentService, PreparedRun, SessionRegistry
+from hephaestus.integration.service import AgentService, PreparedRun
 from hephaestus.store.db import connect
-from hephaestus.store.profiles import create_profile
+from hephaestus.store.nodes import create_node
 from hephaestus.store.runs import get_run
 from hephaestus.store.threads import list_turns
 from hephaestus.store.violations import list_violations
@@ -20,10 +20,12 @@ from hephaestus.store.violations import list_violations
 
 def _contract(**kwargs) -> ExecutionContract:
     defaults = dict(
-        actor="work-001",
-        role="worker",
+        actor="node-001",
+        node_id="node-001",
+        provider="codex",
+        tags=["worker"],
         context="thread-001",
-        scope="issue:001",
+        scope="workflow:issue-001/placement:node-001",
         model="gpt-5.4",
         effort=None,
         tools=[],
@@ -33,11 +35,26 @@ def _contract(**kwargs) -> ExecutionContract:
     return ExecutionContract(**defaults)
 
 
-def test_routing_is_static_and_role_based():
-    assert tool_for(Role.WORKER) is Tool.CODEX
-    for role in (Role.ORCHESTRATOR, Role.PRODUCT_MANAGER, Role.ARCHITECT,
-                 Role.QA, Role.DESIGNER, Role.DEVOPS):
-        assert tool_for(role) is Tool.CLAUDE
+def _task(
+    *,
+    node_id: str | None = None,
+    provider: str = "claude",
+    tags: list[str] | None = None,
+    prompt: str = "go",
+    **kwargs,
+) -> AgentTask:
+    return AgentTask(
+        node_id=node_id,
+        provider=provider,
+        tags=list(tags or ["architect"]),
+        prompt=prompt,
+        **kwargs,
+    )
+
+
+def test_routing_uses_provider():
+    assert tool_for_provider("codex") is Tool.CODEX
+    assert tool_for_provider("claude") is Tool.CLAUDE
 
 
 def test_context_injects_directive_issue_and_tdd(tmp_path):
@@ -48,7 +65,7 @@ def test_context_injects_directive_issue_and_tdd(tmp_path):
     (a / "architect" / "issues").mkdir(parents=True)
     (a / "architect" / "issues" / "issue-009.md").write_text("ISSUE NINE SPEC", encoding="utf-8")
 
-    ctx = build_session_context(tmp_path, Role.WORKER, "issue-009")
+    ctx = build_session_context(tmp_path, node_id="node-001", tags=["worker"], issue_id="issue-009")
     assert {p.name for p in ctx.files} == {"claude.md", "tdd.md", "issue-009.md"}
     assert ctx.missing == []
     assert "WORKER DIRECTIVE" in ctx.system_prompt
@@ -56,7 +73,7 @@ def test_context_injects_directive_issue_and_tdd(tmp_path):
 
 
 def test_context_reports_missing_files(tmp_path):
-    ctx = build_session_context(tmp_path, Role.ARCHITECT, "issue-001")
+    ctx = build_session_context(tmp_path, node_id="node-001", tags=["architect"], issue_id="issue-001")
     assert ctx.files == []
     assert any(p.name == "architect.md" for p in ctx.missing)
     assert any(p.name == "issue-001.md" for p in ctx.missing)
@@ -103,19 +120,16 @@ def test_build_codex_argv_omits_effort_when_unset():
 
 
 def test_resolve_routes_by_model_provider(tmp_path):
-    """The chosen model decides the runner, overriding role-based routing."""
+    """The chosen model decides the runner, overriding the node's provider."""
     runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
     service = AgentService(tmp_path, runners=runners)
 
-    # architect normally -> Claude, but a Codex model forces Codex
-    tool, _ = service.resolve(AgentTask(role=Role.ARCHITECT, prompt="x", model="gpt-5.4"))
+    tool, _ = service.resolve(_task(provider="claude", tags=["architect"], prompt="x", model="gpt-5.4"))
     assert tool == Tool.CODEX
-    # worker normally -> Codex, but a Claude alias forces Claude
-    tool2, _ = service.resolve(AgentTask(role=Role.WORKER, prompt="x", model="opus"))
+    tool2, _ = service.resolve(_task(provider="codex", tags=["worker"], prompt="x", model="opus"))
     assert tool2 == Tool.CLAUDE
-    # no model -> role default
-    assert service.resolve(AgentTask(role=Role.ARCHITECT, prompt="x"))[0] == Tool.CLAUDE
-    assert service.resolve(AgentTask(role=Role.WORKER, prompt="x"))[0] == Tool.CODEX
+    assert service.resolve(_task(provider="claude", tags=["architect"], prompt="x"))[0] == Tool.CLAUDE
+    assert service.resolve(_task(provider="codex", tags=["worker"], prompt="x"))[0] == Tool.CODEX
 
 
 def test_provider_for_model_classifies():
@@ -165,7 +179,7 @@ def test_service_skips_empty_lifecycle_turns(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: _LifecycleRunner(), Tool.CODEX: _LifecycleRunner()}
         service = AgentService(tmp_path, runners=runners)
-        prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="hi", issue_id="issue-001"))
+        prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="hi", issue_id="issue-001"))
         async for _ in service.run(prepared):
             pass
         return list_turns(service.state_db_path, prepared.thread_id)
@@ -260,7 +274,7 @@ def test_trace_persists_and_queryable_by_thread(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: _ToolRunner(), Tool.CODEX: _ToolRunner()}
         svc = AgentService(tmp_path, runners=runners)
-        prepared = svc.begin(AgentTask(role=Role.WORKER, prompt="x", issue_id="issue-001", model="gpt-5.4"))
+        prepared = svc.begin(_task(provider="codex", tags=["worker"], prompt="x", issue_id="issue-001", model="gpt-5.4"))
         async for _ in svc.run(prepared):
             pass
         return svc.state_db_path, prepared.thread_id
@@ -299,8 +313,8 @@ def test_claude_options_pass_effort():
     pytest.importorskip("claude_agent_sdk")
     from hephaestus.integration.runners import _claude_options
 
-    ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[], system_prompt="")
-    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x", effort="xhigh"))
+    ctx = SessionContext(node_id="node-001", tags=["architect"], issue_id=None, files=[], missing=[], system_prompt="")
+    opts = _claude_options(ctx, _contract(provider="claude", tags=["architect"], model=None, prompt="x", effort="xhigh"))
     assert getattr(opts, "effort", None) == "xhigh"
 
 
@@ -308,7 +322,7 @@ def test_service_routes_worker_through_codex_echo():
     async def run():
         runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
         service = AgentService("sample", runners=runners)
-        task = AgentTask(role=Role.WORKER, prompt="hello worker", issue_id="issue-003")
+        task = _task(provider="codex", tags=["worker"], prompt="hello worker", issue_id="issue-003")
         return [ev async for ev in service.run(task)]
 
     events = asyncio.run(run())
@@ -319,12 +333,23 @@ def test_service_routes_worker_through_codex_echo():
     assert "hello worker" in joined
 
 
-def test_begin_role_run_is_callable_without_desktop(tmp_path):
+def test_begin_node_run_is_callable_without_desktop(tmp_path):
     runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
     service = AgentService(tmp_path, runners=runners)
+    node = create_node(
+        service.state_db_path,
+        tmp_path,
+        name="Architect One",
+        provider="claude",
+        tags=["architect"],
+        rules=[],
+        model="gpt-5.4",
+        effort="high",
+        working_dir=str(tmp_path / "repo"),
+    )
 
-    prepared = service.begin_role_run(
-        role=Role.ARCHITECT,
+    prepared = service.begin_node_run(
+        node_id=node.node_id,
         prompt="design it",
         issue_id="issue-010",
         cwd=tmp_path / "repo",
@@ -333,7 +358,7 @@ def test_begin_role_run_is_callable_without_desktop(tmp_path):
     )
 
     assert isinstance(prepared, PreparedRun)
-    assert prepared.task.role is Role.ARCHITECT
+    assert prepared.task.node_id == node.node_id
     assert prepared.task.prompt == "design it"
     assert prepared.task.issue_id == "issue-010"
     assert prepared.task.cwd == (tmp_path / "repo")
@@ -342,30 +367,30 @@ def test_begin_role_run_is_callable_without_desktop(tmp_path):
     assert prepared.tool is Tool.CODEX
 
 
-def test_begin_profile_run_resolves_model_effort_and_cwd_from_profile(tmp_path):
+def test_begin_node_run_resolves_model_effort_and_cwd_from_node(tmp_path):
     runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
     service = AgentService(tmp_path, runners=runners)
-    profile = create_profile(
+    node = create_node(
         service.state_db_path,
         tmp_path,
         name="Worker One",
-        role="worker",
+        provider="codex",
+        tags=["worker"],
         rules=["G-001"],
         model="gpt-5.4",
         effort="xhigh",
         working_dir=str(tmp_path / "svc"),
     )
 
-    prepared = service.begin_profile_run(
-        agent_id=profile.agent_id,
+    prepared = service.begin_node_run(
+        node_id=node.node_id,
         prompt="implement it",
         issue_id="issue-012",
     )
 
     assert isinstance(prepared, PreparedRun)
-    assert prepared.agent_id == profile.agent_id
-    assert prepared.task.role is Role.WORKER
-    assert prepared.task.agent_id == profile.agent_id
+    assert prepared.node_id == node.node_id
+    assert prepared.task.node_id == node.node_id
     assert prepared.task.model == "gpt-5.4"
     assert prepared.task.effort == "xhigh"
     assert prepared.task.cwd == (tmp_path / "svc")
@@ -383,7 +408,7 @@ def test_service_persists_actual_model_and_governance_violation(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: _MismatchRunner(), Tool.CODEX: _MismatchRunner()}
         service = AgentService(tmp_path, runners=runners)
-        prepared = service.begin(AgentTask(role=Role.WORKER, prompt="go", issue_id="issue-013", model="gpt-5.4"))
+        prepared = service.begin(_task(provider="codex", tags=["worker"], prompt="go", issue_id="issue-013", model="gpt-5.4"))
         async for _ in service.run(prepared):
             pass
         return service, prepared
@@ -408,7 +433,7 @@ def test_service_persists_run_lifecycle_and_transcript(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
         service = AgentService(tmp_path, runners=runners)
-        prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="design the fix", issue_id="issue-003"))
+        prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="design the fix", issue_id="issue-003"))
 
         running = get_run(service.state_db_path, prepared.run_id)
         assert running.status == "running"
@@ -424,7 +449,7 @@ def test_service_persists_run_lifecycle_and_transcript(tmp_path):
     assert [turn.kind for turn in turns] == ["text", "system", "system", "text", "result"]
     assert [turn.text for turn in turns] == [
         "design the fix",
-        "[echo:claude] role=architect issue=issue-003",
+        "[echo:claude] node=node-001 tags=architect issue=issue-003",
         "context files: ['architect.md', 'issue-003.md']",
         "design the fix",
         "ok",
@@ -432,29 +457,31 @@ def test_service_persists_run_lifecycle_and_transcript(tmp_path):
     assert [event.kind for event in events] == ["system", "system", "text", "result"]
 
 
-def test_service_reuses_thread_for_same_actor_and_issue(tmp_path):
+def test_service_creates_new_thread_per_run(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
         service = AgentService(tmp_path, runners=runners)
 
-        first = service.begin(AgentTask(role=Role.ARCHITECT, prompt="first pass", issue_id="issue-003"))
+        first = service.begin(_task(provider="claude", tags=["architect"], prompt="first pass", issue_id="issue-003"))
         async for _ in service.run(first):
             pass
 
-        second = service.begin(AgentTask(role=Role.ARCHITECT, prompt="follow up", issue_id="issue-003"))
+        second = service.begin(_task(provider="claude", tags=["architect"], prompt="follow up", issue_id="issue-003"))
         async for _ in service.run(second):
             pass
 
         return service, first, second
 
     service, first, second = asyncio.run(go())
-    turns = list_turns(service.state_db_path, second.thread_id)
+    first_turns = list_turns(service.state_db_path, first.thread_id)
+    second_turns = list_turns(service.state_db_path, second.thread_id)
 
-    assert second.thread_id == first.thread_id
-    assert [turn.text for turn in turns if turn.role == "user"] == ["first pass", "follow up"]
+    assert second.thread_id != first.thread_id
+    assert [turn.text for turn in first_turns if turn.role == "user"] == ["first pass"]
+    assert [turn.text for turn in second_turns if turn.role == "user"] == ["follow up"]
 
 
-def test_runs_serialize_per_actor_but_parallel_across_actors(tmp_path):
+def test_runs_serialize_per_node_but_parallel_across_nodes(tmp_path):
     class CountingRunner:
         tool = Tool.CLAUDE
 
@@ -477,28 +504,31 @@ def test_runs_serialize_per_actor_but_parallel_across_actors(tmp_path):
     async def same_actor():
         runner = CountingRunner()
         service = AgentService(tmp_path / "same", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        node = create_node(service.state_db_path, tmp_path / "same", "Architect", "claude", ["architect"], [])
         await asyncio.gather(
-            drain(service, AgentTask(role=Role.ARCHITECT, prompt="one", issue_id="issue-003")),
-            drain(service, AgentTask(role=Role.ARCHITECT, prompt="two", issue_id="issue-003")),
+            drain(service, _task(node_id=node.node_id, provider="claude", tags=["architect"], prompt="one", issue_id="issue-003")),
+            drain(service, _task(node_id=node.node_id, provider="claude", tags=["architect"], prompt="two", issue_id="issue-003")),
         )
         return runner.max_active
 
-    async def different_actors():
+    async def different_nodes():
         runner = CountingRunner()
         service = AgentService(tmp_path / "different", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        architect = create_node(service.state_db_path, tmp_path / "different", "Architect", "claude", ["architect"], [])
+        qa = create_node(service.state_db_path, tmp_path / "different", "QA", "claude", ["qa"], [])
         await asyncio.gather(
-            drain(service, AgentTask(role=Role.ARCHITECT, prompt="architect", issue_id="issue-003")),
-            drain(service, AgentTask(role=Role.QA, prompt="qa", issue_id="issue-003")),
+            drain(service, _task(node_id=architect.node_id, provider="claude", tags=["architect"], prompt="architect", issue_id="issue-003")),
+            drain(service, _task(node_id=qa.node_id, provider="claude", tags=["qa"], prompt="qa", issue_id="issue-003")),
         )
         return runner.max_active
 
     assert asyncio.run(same_actor()) == 1
-    assert asyncio.run(different_actors()) == 2
+    assert asyncio.run(different_nodes()) == 2
 
 
 def test_service_marks_incomplete_runs_interrupted_on_next_open(tmp_path):
     service = AgentService(tmp_path, runners={Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)})
-    prepared = service.begin(AgentTask(role=Role.ARCHITECT, prompt="recover me", issue_id="issue-003"))
+    prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="recover me", issue_id="issue-003"))
 
     interrupted_service = AgentService(
         tmp_path,
@@ -512,54 +542,19 @@ def test_service_marks_incomplete_runs_interrupted_on_next_open(tmp_path):
     assert [turn.text for turn in turns] == ["recover me"]
 
 
-def test_session_registry_keys():
-    reg = SessionRegistry()
-    reg.set(Role.ARCHITECT, "issue-003", "sess-abc")
-    assert reg.get(Role.ARCHITECT, "issue-003") == "sess-abc"
-    assert reg.key(Role.QA, None) == "qa"
-    assert reg.key(Role.ARCHITECT, "issue-003") == "architect:issue-003"
-    assert reg.all() == {"architect:issue-003": "sess-abc"}
-
-
 def test_claude_options_actually_inject_context():
     """Guards the silent-drop bug: OKF context must reach ClaudeAgentOptions."""
     pytest.importorskip("claude_agent_sdk")
     from hephaestus.integration.runners import _claude_options
 
-    ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[],
+    ctx = SessionContext(node_id="node-001", tags=["architect"], issue_id=None, files=[], missing=[],
                          system_prompt="OKF DIRECTIVE CONTENT")
-    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x"))
+    opts = _claude_options(ctx, _contract(provider="claude", tags=["architect"], model=None, prompt="x"))
     assert "OKF DIRECTIVE CONTENT" in str(opts.system_prompt)
 
 
-def test_service_resumes_captured_session():
-    """A result event carrying a session id is stored and reused on the next run."""
-    class _OneShot:
-        tool = Tool.CLAUDE
-
-        def __init__(self):
-            self.seen_resume = []
-
-        async def run(self, contract, ctx):
-            self.seen_resume.append(contract.resume)
-            yield AgentEvent("result", "done", raw={"session_id": "sess-xyz"})
-
-    runner = _OneShot()
-    service = AgentService("sample", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
-
-    async def go():
-        task = AgentTask(role=Role.ARCHITECT, prompt="first", issue_id="issue-001")
-        async for _ in service.run(task):
-            pass
-        async for _ in service.run(AgentTask(role=Role.ARCHITECT, prompt="second", issue_id="issue-001")):
-            pass
-
-    asyncio.run(go())
-    assert runner.seen_resume == [None, "sess-xyz"]  # second run resumed the captured session
-
-
-def test_compiled_history_injected_into_system_prompt(tmp_path):
-    """Second run's context must contain prior-turn history block."""
+def test_second_run_starts_with_clean_context(tmp_path):
+    """Per-run threads mean the second run should not inherit prior transcript history."""
     captured_prompts: list[str] = []
 
     class CapturingRunner:
@@ -573,14 +568,14 @@ def test_compiled_history_injected_into_system_prompt(tmp_path):
     async def go():
         runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
         service = AgentService(tmp_path, runners=runners)
-        task = AgentTask(role=Role.ARCHITECT, prompt="first message", issue_id="issue-001")
+        task = _task(provider="claude", tags=["architect"], prompt="first message", issue_id="issue-001")
         async for _ in service.run(task):
             pass
-        task2 = AgentTask(role=Role.ARCHITECT, prompt="second message", issue_id="issue-001")
+        task2 = _task(provider="claude", tags=["architect"], prompt="second message", issue_id="issue-001")
         async for _ in service.run(task2):
             pass
 
     asyncio.run(go())
     assert len(captured_prompts) == 2
-    assert "Prior context" not in captured_prompts[0]  # first run has no history
-    assert "Prior context" in captured_prompts[1]       # second run sees the first
+    assert "Prior context" not in captured_prompts[0]
+    assert "Prior context" not in captured_prompts[1]

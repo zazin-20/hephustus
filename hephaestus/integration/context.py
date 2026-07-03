@@ -1,35 +1,34 @@
-"""OKF context assembly for a session (spec/architecture.md §5.1 / §5.2).
-
-Given a role (and optionally an issue), determine which OKF documents to inject
-and concatenate them into a system prompt. Pure and filesystem-only — no agent
-calls — so it is fully unit-testable.
-"""
+"""OKF context assembly for a node run."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from hephaestus.integration.routing import ROLE_DIRECTIVE, Role
+from hephaestus.integration.routing import TAG_DIRECTIVE
 from hephaestus.okf_layout import OKFLayout
 
-# Roles that operate against a specific issue spec.
-_ISSUE_CONSUMERS = {Role.WORKER, Role.QA, Role.ARCHITECT}
+_ISSUE_CONSUMER_TAGS = {"worker", "qa", "architect"}
 
 
 @dataclass(frozen=True)
 class SessionContext:
-    role: Role
+    node_id: str
+    tags: list[str]
     issue_id: str | None
     files: list[Path]      # existing files injected
     missing: list[Path]    # referenced but absent (surfaced, not fatal)
     system_prompt: str
 
 
-def _candidate_paths(layout: OKFLayout, role: Role, issue_id: str | None) -> list[Path]:
-    paths = [layout.resolve(ROLE_DIRECTIVE[role])]
-    if issue_id and role in _ISSUE_CONSUMERS:
+def _candidate_paths(layout: OKFLayout, tags: list[str], issue_id: str | None) -> list[Path]:
+    paths: list[Path] = []
+    for tag in tags:
+        relative = TAG_DIRECTIVE.get(tag)
+        if relative is not None:
+            paths.append(layout.resolve(relative))
+    if issue_id and _ISSUE_CONSUMER_TAGS.intersection(tags):
         paths.append(layout.issue_path(issue_id))
-    if role is Role.WORKER:
+    if "worker" in tags:
         paths.append(layout.worker_tdd_path())
     return paths
 
@@ -45,17 +44,23 @@ def _render(root: Path, files: list[Path]) -> str:
     return "\n\n".join(parts)
 
 
-def build_session_context(root: str | Path, role: Role | str, issue_id: str | None = None) -> SessionContext:
+def build_session_context(
+    root: str | Path,
+    *,
+    node_id: str,
+    tags: list[str],
+    issue_id: str | None = None,
+) -> SessionContext:
     render_root = Path(root)
     layout = OKFLayout.for_existing_root(render_root)
-    role = Role(role)
 
-    candidates = _candidate_paths(layout, role, issue_id)
+    candidates = _candidate_paths(layout, tags, issue_id)
     files = [p for p in candidates if p.is_file()]
     missing = [p for p in candidates if not p.is_file()]
 
     return SessionContext(
-        role=role,
+        node_id=node_id,
+        tags=list(tags),
         issue_id=issue_id,
         files=files,
         missing=missing,

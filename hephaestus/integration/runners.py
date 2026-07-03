@@ -21,7 +21,7 @@ from typing import AsyncIterator, Protocol, runtime_checkable
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.adapters import claude_flags, codex_flags
 from hephaestus.integration.context import SessionContext
-from hephaestus.integration.routing import Role, Tool
+from hephaestus.integration.routing import Tool
 from hephaestus.integration.turns import turn_payload
 
 try:
@@ -35,14 +35,17 @@ except ImportError:  # pragma: no cover
 
 @dataclass(frozen=True)
 class AgentTask:
-    role: Role
+    node_id: str | None
+    provider: str
+    tags: list[str]
     prompt: str
     issue_id: str | None = None
-    agent_id: str | None = None
     cwd: Path | None = None
     model: str | None = None
     effort: str | None = None    # reasoning effort (low|medium|high|xhigh|max)
-    resume: str | None = None    # prior session id to resume (spec §5.1)
+    workflow_id: str | None = None
+    workflow_run_id: str | None = None
+    placement_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,11 +92,12 @@ class EchoRunner:
         self.tool = tool
 
     async def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
-        yield AgentEvent("system", f"[echo:{self.tool.value}] role={contract.role} issue={contract.issue_id}")
+        yield AgentEvent(
+            "system",
+            f"[echo:{self.tool.value}] node={contract.node_id} tags={','.join(contract.tags)} issue={contract.issue_id}",
+        )
         if contract.model or contract.effort:
             yield AgentEvent("system", f"model={contract.model} effort={contract.effort}")
-        if contract.resume:
-            yield AgentEvent("system", f"resume={contract.resume}")
         yield AgentEvent("system", f"context files: {[p.name for p in ctx.files]}")
         if ctx.missing:
             yield AgentEvent("system", f"missing: {[p.name for p in ctx.missing]}")
@@ -130,7 +134,6 @@ def _claude_options(ctx: SessionContext, contract: ExecutionContract):
         ("disallowed_tools", adapter_flags.get("disallowed_tools")),
         ("model", contract.model),
         ("effort", contract.effort),
-        ("resume", contract.resume),
     ):
         if field_name in fields and value not in (None, [], ""):
             kwargs[field_name] = value

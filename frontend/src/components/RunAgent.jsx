@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { runAgent, onAgent } from '../api.js'
 
-const ROLES = ['orchestrator', 'product-manager', 'architect', 'worker', 'qa', 'design-system', 'devops']
+const PROVIDERS = ['claude', 'codex']
 
 const CATEGORY_STYLE = {
   content: 'text-slate-200',
@@ -24,7 +24,8 @@ function Field({ label, children }) {
 }
 
 export default function RunAgent() {
-  const [role, setRole] = useState('architect')
+  const [provider, setProvider] = useState('claude')
+  const [tags, setTags] = useState('architect')
   const [issue, setIssue] = useState('')
   const [cwd, setCwd] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -45,7 +46,8 @@ export default function RunAgent() {
   async function start() {
     if (!prompt.trim() || running) return
     setEvents([]); setMeta(null); setRunning(true)
-    const res = await runAgent(role, prompt, issue, cwd, null)
+    const parsedTags = tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+    const res = await runAgent(provider, parsedTags, prompt, issue, cwd, null)
     if (!res) {
       setRunning(false)
       setEvents([{ kind: 'error', text: 'Agent bridge unavailable — run inside the desktop app.', category: 'error' }])
@@ -58,10 +60,13 @@ export default function RunAgent() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
       <aside className="space-y-3 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-        <Field label="Role">
-          <select value={role} onChange={(e) => setRole(e.target.value)} className={INPUT}>
-            {ROLES.map((r) => <option key={r} value={r} className="bg-[#0b0e14]">{r}</option>)}
+        <Field label="Provider">
+          <select value={provider} onChange={(e) => setProvider(e.target.value)} className={INPUT}>
+            {PROVIDERS.map((value) => <option key={value} value={value} className="bg-[#0b0e14]">{value}</option>)}
           </select>
+        </Field>
+        <Field label="Tags">
+          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="architect, design" className={INPUT} />
         </Field>
         <Field label="Issue (optional)">
           <input value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="issue-003" className={INPUT} />

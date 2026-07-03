@@ -8,9 +8,12 @@ from hephaestus.integration.adapters import claude_flags, codex_flags
 
 def _contract(**kwargs) -> ExecutionContract:
     defaults = dict(
-        actor="work-001",
+        actor="node-001",
+        node_id="node-001",
+        provider="claude",
+        tags=["architect"],
         context="thread-abc",
-        scope="issue:007",
+        scope="workflow:issue-007/placement:node-001",
         model="claude-sonnet-4-6",
         effort="medium",
         tools=[],
@@ -21,9 +24,12 @@ def _contract(**kwargs) -> ExecutionContract:
 
 def test_execution_contract_defaults():
     c = _contract()
-    assert c.actor == "work-001"
+    assert c.actor == "node-001"
+    assert c.node_id == "node-001"
+    assert c.provider == "claude"
+    assert c.tags == ["architect"]
     assert c.context == "thread-abc"
-    assert c.scope == "issue:007"
+    assert c.scope == "workflow:issue-007/placement:node-001"
     assert c.model == "claude-sonnet-4-6"
     assert c.effort == "medium"
     assert c.tools == []
@@ -64,7 +70,7 @@ def test_claude_flags_disallowed_tools():
 
 
 def test_claude_flags_cwd_from_scope():
-    c = _contract(scope="issue:007", actor="work-001", cwd="/repo")
+    c = _contract(scope="workflow:issue-007/placement:node-001", actor="node-001", cwd="/repo")
     flags = claude_flags(c)
     assert flags["cwd"] == "/repo"
 

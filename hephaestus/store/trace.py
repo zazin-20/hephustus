@@ -15,7 +15,7 @@ from hephaestus.store.db import connect, dumps_json, loads_json
 class TraceEvent:
     id: str
     run_id: str
-    agent_id: str
+    node_id: str
     ts: str
     action: str
     target_path: str | None
@@ -26,7 +26,7 @@ def append_trace_event(
     db_path: str | Path,
     *,
     run_id: str,
-    agent_id: str,
+    node_id: str,
     action: str,
     target_path: str | None = None,
     raw: dict | None = None,
@@ -34,7 +34,7 @@ def append_trace_event(
     event = TraceEvent(
         id=uuid.uuid4().hex,
         run_id=run_id,
-        agent_id=agent_id,
+        node_id=node_id,
         ts=_utc_now(),
         action=action,
         target_path=target_path,
@@ -43,13 +43,13 @@ def append_trace_event(
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO trace_events(id, run_id, agent_id, ts, action, target_path, raw)
+            INSERT INTO trace_events(id, run_id, node_id, ts, action, target_path, raw)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event.id,
                 event.run_id,
-                event.agent_id,
+                event.node_id,
                 event.ts,
                 event.action,
                 event.target_path,
@@ -64,7 +64,7 @@ def list_trace_events(
     db_path: str | Path,
     *,
     run_id: str | None = None,
-    agent_id: str | None = None,
+    node_id: str | None = None,
     thread_id: str | None = None,
 ) -> list[TraceEvent]:
     clauses: list[str] = []
@@ -73,16 +73,16 @@ def list_trace_events(
     if run_id is not None:
         clauses.append("run_id = ?")
         params.append(run_id)
-    if agent_id is not None:
-        clauses.append("agent_id = ?")
-        params.append(agent_id)
+    if node_id is not None:
+        clauses.append("node_id = ?")
+        params.append(node_id)
     if thread_id is not None:
         clauses.append("run_id IN (SELECT id FROM runs WHERE thread_id = ?)")
         params.append(thread_id)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"""
-        SELECT id, run_id, agent_id, ts, action, target_path, raw
+        SELECT id, run_id, node_id, ts, action, target_path, raw
         FROM trace_events
         {where}
         ORDER BY ts ASC
@@ -95,7 +95,7 @@ def list_trace_events(
         TraceEvent(
             id=row[0],
             run_id=row[1],
-            agent_id=row[2],
+            node_id=row[2],
             ts=row[3],
             action=row[4],
             target_path=row[5],

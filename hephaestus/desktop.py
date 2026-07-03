@@ -21,10 +21,9 @@ from hephaestus.codeview import CodeViewer
 from hephaestus.dashboard import snapshot
 from hephaestus.integration import AgentService
 from hephaestus.integration.turns import turn_payload
-from hephaestus.store.profiles import create_profile as create_profile_record
-from hephaestus.store.profiles import delete_profile as delete_profile_record
-from hephaestus.store.profiles import get_profile as get_profile_record
-from hephaestus.store.profiles import list_profiles as list_profile_records
+from hephaestus.store.nodes import create_node as create_node_record
+from hephaestus.store.nodes import delete_node as delete_node_record
+from hephaestus.store.nodes import list_nodes as list_node_records
 from hephaestus.store.threads import list_threads as list_thread_records
 from hephaestus.store.threads import list_turns as list_turn_records
 from hephaestus.store.threads import set_included as set_turn_included_record
@@ -96,17 +95,18 @@ class Bridge:
     def read_file(self, repo: str, relpath: str) -> dict:
         return self._code.read_file(repo, relpath)
 
-    # Coordinator / profiles
-    def list_profiles(self) -> list[dict]:
+    # Coordinator / nodes
+    def list_nodes(self) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        profiles = list_profile_records(self._app._workspace.state_db_path)
-        return [{**asdict(profile), "status": "idle"} for profile in profiles]
+        nodes = list_node_records(self._app._workspace.state_db_path)
+        return [{**asdict(node), "status": "idle"} for node in nodes]
 
-    def create_profile(
+    def create_node(
         self,
         name: str,
-        role: str,
+        provider: str,
+        tags: list,
         rules: list,
         model=None,
         effort=None,
@@ -114,32 +114,34 @@ class Bridge:
     ) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        profile = create_profile_record(
+        node = create_node_record(
             self._app._workspace.state_db_path,
             self._app._workspace.root,
             name=name,
-            role=role,
+            provider=provider,
+            tags=list(tags),
             rules=list(rules),
             model=model,
             effort=effort,
             working_dir=working_dir,
         )
         return {
-            "agent_id": profile.agent_id,
-            "name": profile.name,
-            "role": profile.role,
+            "node_id": node.node_id,
+            "name": node.name,
+            "provider": node.provider,
+            "tags": node.tags,
             "status": "idle",
         }
 
-    def delete_profile(self, agent_id: str) -> None:
+    def delete_node(self, node_id: str) -> None:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        delete_profile_record(self._app._workspace.state_db_path, agent_id, self._app._workspace.root)
+        delete_node_record(self._app._workspace.state_db_path, node_id, self._app._workspace.root)
 
-    def list_threads(self, agent_id: str) -> list[dict]:
+    def list_threads(self, node_id: str) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        return [asdict(thread) for thread in list_thread_records(self._app._workspace.state_db_path, agent_id)]
+        return [asdict(thread) for thread in list_thread_records(self._app._workspace.state_db_path, node_id)]
 
     def get_transcript(self, thread_id: str) -> list[dict]:
         if self._app is None:
@@ -157,19 +159,19 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         set_turn_included_record(self._app._workspace.state_db_path, turn_id, bool(included))
 
-    def send_message(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
+    def send_message(self, node_id: str, prompt: str, issue_id=None, model=None) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        return self._app.start_profile_agent(agent_id, prompt, issue_id, model)
+        return self._app.start_node_agent(node_id, prompt, issue_id, model)
 
-    def get_trace(self, run_id: str | None = None, agent_id: str | None = None, thread_id: str | None = None) -> list[dict]:
+    def get_trace(self, run_id: str | None = None, node_id: str | None = None, thread_id: str | None = None) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         from hephaestus.store.trace import list_trace_events
         events = list_trace_events(
             self._app._workspace.state_db_path,
             run_id=run_id or None,
-            agent_id=agent_id or None,
+            node_id=node_id or None,
             thread_id=thread_id or None,
         )
         return [asdict(e) for e in events]
@@ -202,34 +204,34 @@ class Bridge:
         }
 
     # Corrections feedback queue
-    def save_correction(self, violation_id, agent_id, issue_id, note: str) -> dict:
+    def save_correction(self, violation_id, node_id, issue_id, note: str) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         from hephaestus.store.corrections import append_correction
         c = append_correction(
             self._app._workspace.state_db_path,
             violation_id=violation_id or None,
-            agent_id=agent_id or None,
+            node_id=node_id or None,
             issue_id=issue_id or None,
             note=note,
         )
         return asdict(c)
 
-    def get_corrections(self, agent_id=None, issue_id=None) -> list[dict]:
+    def get_corrections(self, node_id=None, issue_id=None) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         from hephaestus.store.corrections import list_corrections
         return [asdict(c) for c in list_corrections(
             self._app._workspace.state_db_path,
-            agent_id=agent_id or None,
+            node_id=node_id or None,
             issue_id=issue_id or None,
         )]
 
     # Agents (§5) — returns run metadata; events stream via window.__hephaestus_agent__
-    def run_agent(self, role: str, prompt: str, issue_id=None, cwd=None, model=None, effort=None) -> dict:
+    def run_agent(self, provider: str, tags: list[str], prompt: str, issue_id=None, cwd=None, model=None, effort=None) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
-        return self._app.start_agent(role, prompt, issue_id, cwd, model, effort)
+        return self._app.start_agent(provider, tags, prompt, issue_id, cwd, model, effort)
 
 
 class DesktopApp:
@@ -267,11 +269,12 @@ class DesktopApp:
         loop.run_forever()
 
     # --- Agents (§5): run on the core loop, stream events to the UI ---
-    def start_agent(self, role, prompt, issue_id=None, cwd=None, model=None, effort=None) -> dict:
+    def start_agent(self, provider, tags, prompt, issue_id=None, cwd=None, model=None, effort=None) -> dict:
         if self._loop is None:
             raise RuntimeError("core loop not started yet")
-        prepared = self._agents.begin_role_run(
-            role=role,
+        prepared = self._agents.begin_ad_hoc_run(
+            provider=provider,
+            tags=list(tags),
             prompt=prompt,
             issue_id=issue_id,
             cwd=cwd,
@@ -280,11 +283,11 @@ class DesktopApp:
         )
         return self._launch_prepared(prepared)
 
-    def start_profile_agent(self, agent_id: str, prompt: str, issue_id=None, model=None) -> dict:
+    def start_node_agent(self, node_id: str, prompt: str, issue_id=None, model=None) -> dict:
         if self._loop is None:
             raise RuntimeError("core loop not started yet")
-        prepared = self._agents.begin_profile_run(
-            agent_id=agent_id,
+        prepared = self._agents.begin_node_run(
+            node_id=node_id,
             prompt=prompt,
             issue_id=issue_id,
             model=model,
@@ -296,8 +299,9 @@ class DesktopApp:
         return {
             "run_id": prepared.run_id,
             "thread_id": prepared.thread_id,
-            "agent_id": prepared.agent_id,
-            "role": prepared.task.role.value,
+            "node_id": prepared.node_id,
+            "provider": prepared.task.provider,
+            "tags": prepared.task.tags,
             "tool": prepared.tool.value,
             "context": [p.name for p in prepared.ctx.files],
             "missing": [p.name for p in prepared.ctx.missing],

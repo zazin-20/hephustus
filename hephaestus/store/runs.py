@@ -13,7 +13,7 @@ from hephaestus.store.db import connect, dumps_json, loads_json
 class Run:
     id: str
     thread_id: str
-    agent_id: str
+    node_id: str
     contract: dict
     status: str
     usage: dict | None
@@ -22,11 +22,11 @@ class Run:
     ended_at: str | None
 
 
-def create_run(db_path, *, thread_id: str, agent_id: str, contract: dict) -> Run:
+def create_run(db_path, *, thread_id: str, node_id: str, contract: dict) -> Run:
     run = Run(
         id=_new_id(),
         thread_id=thread_id,
-        agent_id=agent_id,
+        node_id=node_id,
         contract=dict(contract),
         status="running",
         usage=None,
@@ -37,13 +37,13 @@ def create_run(db_path, *, thread_id: str, agent_id: str, contract: dict) -> Run
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO runs(id, thread_id, agent_id, contract, status, usage, outcome, started_at, ended_at)
+            INSERT INTO runs(id, thread_id, node_id, contract, status, usage, outcome, started_at, ended_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run.id,
                 run.thread_id,
-                run.agent_id,
+                run.node_id,
                 dumps_json(run.contract),
                 run.status,
                 None,
@@ -104,7 +104,7 @@ def get_run(db_path, run_id: str) -> Run:
     with connect(db_path) as conn:
         row = conn.execute(
             """
-            SELECT id, thread_id, agent_id, contract, status, usage, outcome, started_at, ended_at
+            SELECT id, thread_id, node_id, contract, status, usage, outcome, started_at, ended_at
             FROM runs
             WHERE id = ?
             """,
@@ -119,7 +119,7 @@ def _row_to_run(row) -> Run:
     return Run(
         id=row[0],
         thread_id=row[1],
-        agent_id=row[2],
+        node_id=row[2],
         contract=loads_json(row[3]),
         status=row[4],
         usage=loads_json(row[5]),
