@@ -21,7 +21,7 @@ function CorrectionBox({ toast, onClose }) {
     e.preventDefault()
     if (!note.trim() || saving) return
     setSaving(true)
-    await saveCorrection(toast.rule_id || null, toast.agent_id || null, toast.issue_id || null, note.trim())
+    await saveCorrection(toast.rule_id || null, toast.node_id || null, toast.issue_id || null, note.trim())
     setSaving(false)
     onClose()
   }
@@ -32,7 +32,7 @@ function CorrectionBox({ toast, onClose }) {
         <div className="mb-4 text-sm font-semibold text-slate-100">Correction Box</div>
         <div className="mb-4 space-y-2 rounded-xl border border-white/5 bg-black/30 p-3 text-xs">
           {toast.rule_id && <div><span className="text-slate-500">Rule: </span><span className="font-mono text-slate-300">{toast.rule_id}</span></div>}
-          {toast.agent_id && <div><span className="text-slate-500">Agent: </span><span className="font-mono text-slate-300">{toast.agent_id}</span></div>}
+          {toast.node_id && <div><span className="text-slate-500">Node: </span><span className="font-mono text-slate-300">{toast.node_id}</span></div>}
           {toast.issue_id && <div><span className="text-slate-500">Issue: </span><span className="font-mono text-slate-300">{toast.issue_id}</span></div>}
           <div><span className="text-slate-500">Violation: </span><span className="text-slate-300">{toast.message}</span></div>
         </div>
@@ -105,8 +105,8 @@ function ToastCard({ toast, onDismiss }) {
           {toast.issue_id && (
             <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300 ring-1 ring-sky-500/20">{toast.issue_id}</span>
           )}
-          {toast.agent_id && (
-            <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] text-fuchsia-300 ring-1 ring-fuchsia-500/20">{toast.agent_id}</span>
+          {toast.node_id && (
+            <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] text-fuchsia-300 ring-1 ring-fuchsia-500/20">{toast.node_id}</span>
           )}
         </div>
         <div className="flex gap-2">

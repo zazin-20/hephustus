@@ -7,17 +7,21 @@ from dataclasses import asdict, dataclass, field, replace
 @dataclass(frozen=True)
 class ExecutionContract:
     actor: str
+    node_id: str
+    provider: str
+    tags: list[str]
     context: str
     scope: str
     model: str | None
     effort: str | None
     tools: list[str]
     prompt: str = ""
-    role: str = ""
     tool: str = ""
     issue_id: str | None = None
     cwd: str | None = None
-    resume: str | None = None
+    workflow_id: str | None = None
+    workflow_run_id: str | None = None
+    placement_id: str | None = None
     allowed_paths: list[str] = field(default_factory=list)
     disallowed_tools: list[str] = field(default_factory=list)
     actual_model: str | None = None

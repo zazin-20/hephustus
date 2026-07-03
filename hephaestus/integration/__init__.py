@@ -1,20 +1,10 @@
-"""Agent integration layer (spec/architecture.md §5).
-
-Role-based static routing (§5.3) to two backends:
-  - Claude Code via `claude-agent-sdk`  (Orchestrator, PM, Architect, QA, Designer, DevOps)
-  - Codex via `codex exec` subprocess   (Worker)
-
-The pure parts — routing, OKF context assembly, the session registry — are
-testable without any external dependency. The runner backends are thin, guarded
-adapters; an EchoRunner exercises the whole path offline.
-"""
+"""Agent integration layer (spec/architecture.md §5)."""
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.routing import (
-    ROLE_DIRECTIVE,
-    ROLE_TOOL,
-    Role,
+    TAG_DIRECTIVE,
+    PROVIDER_TOOL,
     Tool,
-    tool_for,
+    tool_for_provider,
 )
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.runners import (
@@ -26,13 +16,13 @@ from hephaestus.integration.runners import (
     EchoRunner,
     build_codex_argv,
 )
-from hephaestus.integration.service import AgentService, SessionRegistry, default_runners
+from hephaestus.integration.service import AgentService, default_runners
 
 __all__ = [
-    "Role", "Tool", "tool_for", "ROLE_TOOL", "ROLE_DIRECTIVE",
+    "Tool", "tool_for_provider", "PROVIDER_TOOL", "TAG_DIRECTIVE",
     "ExecutionContract",
     "SessionContext", "build_session_context",
     "AgentTask", "AgentEvent", "AgentRunner",
     "EchoRunner", "ClaudeRunner", "CodexRunner", "build_codex_argv",
-    "AgentService", "SessionRegistry", "default_runners",
+    "AgentService", "default_runners",
 ]

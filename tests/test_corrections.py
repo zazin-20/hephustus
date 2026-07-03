@@ -14,10 +14,10 @@ def make_db(tmp_path: Path) -> Path:
 def test_append_correction_returns_correction(tmp_path):
     db = make_db(tmp_path)
     # violation_id is FK to violations; pass None to avoid needing a real violation row
-    c = append_correction(db, agent_id="arch-001", issue_id="issue-003", note="Fix this")
+    c = append_correction(db, node_id="node-001", issue_id="issue-003", note="Fix this")
     assert c.id
     assert c.violation_id is None
-    assert c.agent_id == "arch-001"
+    assert c.node_id == "node-001"
     assert c.issue_id == "issue-003"
     assert c.note == "Fix this"
     assert c.created_at
@@ -31,13 +31,13 @@ def test_list_corrections_returns_all(tmp_path):
     assert len(list_corrections(db)) == 3
 
 
-def test_list_corrections_filters_by_agent_id(tmp_path):
+def test_list_corrections_filters_by_node_id(tmp_path):
     db = make_db(tmp_path)
-    append_correction(db, agent_id="arch-001", note="a")
-    append_correction(db, agent_id="work-001", note="b")
-    result = list_corrections(db, agent_id="arch-001")
+    append_correction(db, node_id="node-001", note="a")
+    append_correction(db, node_id="node-002", note="b")
+    result = list_corrections(db, node_id="node-001")
     assert len(result) == 1
-    assert result[0].agent_id == "arch-001"
+    assert result[0].node_id == "node-001"
 
 
 def test_list_corrections_filters_by_issue_id(tmp_path):

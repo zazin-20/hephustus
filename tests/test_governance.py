@@ -16,11 +16,11 @@ def _okf(tmp_path):
     return build_context(tmp_path)
 
 
-def _trace_event(action: str, target_path: str, run_id="run-1", agent_id="work-001") -> TraceEvent:
+def _trace_event(action: str, target_path: str, run_id="run-1", node_id="node-001") -> TraceEvent:
     return TraceEvent(
         id="evt-" + action[:4],
         run_id=run_id,
-        agent_id=agent_id,
+        node_id=node_id,
         action=action,
         target_path=target_path,
         ts=datetime.utcnow().isoformat(),
@@ -54,7 +54,7 @@ def test_g001_passes_when_write_within_allowed_path(tmp_path):
 
 def test_g001_fails_on_write_outside_allowed_paths(tmp_path):
     okf = _okf(tmp_path)
-    trace = [_trace_event("write_file", "hephaestus/core.py", agent_id="work-001")]
+    trace = [_trace_event("write_file", "hephaestus/core.py", node_id="node-001")]
     ctx = EvaluationContext(
         okf=okf,
         trace=trace,
@@ -72,7 +72,7 @@ def test_g001_fails_on_write_outside_allowed_paths(tmp_path):
 
 def test_g001_bash_counts_as_write(tmp_path):
     okf = _okf(tmp_path)
-    trace = [_trace_event("bash", "/etc/hosts", agent_id="arch-002")]
+    trace = [_trace_event("bash", "/etc/hosts", node_id="node-002")]
     ctx = EvaluationContext(
         okf=okf,
         trace=trace,

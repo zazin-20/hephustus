@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  createProfile,
-  deleteProfile,
+  createNode,
+  deleteNode,
   evaluateSpawn,
   getCatalog,
   getTrace,
   getTranscript,
   hasBridge,
-  listProfiles,
+  listNodes,
   listRules,
   listThreads,
   onAgent,
@@ -21,13 +21,9 @@ import { CATALOG_MOCK, COORDINATOR_MOCK, RULES_MOCK } from '../mock.js'
 const INPUT =
   'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
 
-const ROLE_OPTIONS = ['architect', 'worker', 'qa', 'orchestrator']
-
-const ROLE_STYLE = {
-  architect: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
-  worker: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
-  qa: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
-  orchestrator: 'bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-500/30',
+const PROVIDER_STYLE = {
+  claude: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
+  codex: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
 }
 
 const STATUS_STYLE = {
@@ -36,7 +32,8 @@ const STATUS_STYLE = {
 
 const EMPTY_FORM = {
   name: '',
-  role: 'architect',
+  provider: 'claude',
+  tags_input: 'architect',
   rules: [],
   model: '',
   effort: '',
@@ -52,15 +49,30 @@ function Field({ label, children }) {
   )
 }
 
-function RolePill({ role }) {
+function ProviderPill({ provider }) {
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ring-1 ring-inset ${
-        ROLE_STYLE[role] || 'bg-slate-500/15 text-slate-300 ring-white/10'
+        PROVIDER_STYLE[provider] || 'bg-slate-500/15 text-slate-300 ring-white/10'
       }`}
     >
-      {role}
+      {provider}
     </span>
+  )
+}
+
+function TagPills({ tags }) {
+  return (
+    <>
+      {(tags || []).map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-white/10"
+        >
+          {tag}
+        </span>
+      ))}
+    </>
   )
 }
 
@@ -76,15 +88,14 @@ function StatusBadge({ status }) {
   )
 }
 
-function nextMockId(profiles, role) {
-  const prefix = role.slice(0, 4)
+function nextMockId(profiles) {
   const counters = profiles
-    .map((profile) => profile.agent_id)
-    .filter((agentId) => agentId.startsWith(`${prefix}-`))
-    .map((agentId) => Number.parseInt(agentId.split('-')[1], 10))
+    .map((profile) => profile.node_id)
+    .filter((nodeId) => nodeId.startsWith('node-'))
+    .map((nodeId) => Number.parseInt(nodeId.split('-')[1], 10))
     .filter(Number.isFinite)
   const next = counters.length ? Math.max(...counters) + 1 : 1
-  return `${prefix}-${String(next).padStart(3, '0')}`
+  return `node-${String(next).padStart(3, '0')}`
 }
 
 async function copyToClipboard(text) {
@@ -137,7 +148,7 @@ export default function Coordinator() {
   const activeThreadId = useRef(null)
 
   useEffect(() => {
-    loadProfiles()
+    loadNodes()
     if (hasBridge()) {
       void getCatalog().then((c) => c && setCatalog(c))
       void listRules().then((r) => r && setRuleSet(r))
@@ -213,23 +224,23 @@ export default function Coordinator() {
     void loadThreadsFor(selectedId, null)
   }, [selectedId])
 
-  async function loadProfiles() {
+  async function loadNodes() {
     if (!hasBridge()) {
       setProfiles(COORDINATOR_MOCK)
-      setSelectedId((current) => current ?? COORDINATOR_MOCK[0]?.agent_id ?? null)
+      setSelectedId((current) => current ?? COORDINATOR_MOCK[0]?.node_id ?? null)
       return
     }
 
-    const rows = await listProfiles()
+    const rows = await listNodes()
     const nextProfiles = rows || []
     setProfiles(nextProfiles)
     setSelectedId((current) => {
-      if (current && nextProfiles.some((profile) => profile.agent_id === current)) return current
-      return nextProfiles[0]?.agent_id ?? null
+      if (current && nextProfiles.some((profile) => profile.node_id === current)) return current
+      return nextProfiles[0]?.node_id ?? null
     })
   }
 
-  async function loadThreadsFor(agentId, preferredThreadId) {
+  async function loadThreadsFor(nodeId, preferredThreadId) {
     if (!hasBridge()) {
       setThreads([])
       setTranscript([])
@@ -237,7 +248,7 @@ export default function Coordinator() {
       return
     }
 
-    const rows = (await listThreads(agentId)) || []
+    const rows = (await listThreads(nodeId)) || []
     setThreads(rows)
     const nextThreadId =
       preferredThreadId ||
@@ -318,7 +329,8 @@ export default function Coordinator() {
     setError('')
     const payload = {
       name: form.name.trim(),
-      role: form.role,
+      provider: form.provider,
+      tags: form.tags_input.split(',').map((tag) => tag.trim()).filter(Boolean),
       rules: form.rules,
       model: form.model || null,
       effort: form.effort || null,
@@ -327,52 +339,53 @@ export default function Coordinator() {
 
     try {
       if (hasBridge()) {
-        const created = await createProfile(
+        const created = await createNode(
           payload.name,
-          payload.role,
+          payload.provider,
+          payload.tags,
           payload.rules,
           payload.model,
           payload.effort,
           payload.working_dir,
         )
-        await loadProfiles()
-        setSelectedId(created?.agent_id || null)
+        await loadNodes()
+        setSelectedId(created?.node_id || null)
       } else {
         const created = {
           ...payload,
-          agent_id: nextMockId(profiles, payload.role),
+          node_id: nextMockId(profiles),
           created_at: new Date().toISOString(),
           status: 'idle',
         }
         setProfiles((current) => [...current, created])
-        setSelectedId(created.agent_id)
+        setSelectedId(created.node_id)
       }
       setForm(EMPTY_FORM)
       setShowForm(false)
     } catch (err) {
-      setError(err?.message || 'Failed to create profile.')
+      setError(err?.message || 'Failed to create node.')
     } finally {
       setBusy(false)
     }
   }
 
-  async function removeProfile(agentId) {
+  async function removeNode(nodeId) {
     setBusy(true)
     setError('')
     try {
       if (hasBridge()) {
-        await deleteProfile(agentId)
-        await loadProfiles()
+        await deleteNode(nodeId)
+        await loadNodes()
       } else {
-        const nextProfiles = profiles.filter((profile) => profile.agent_id !== agentId)
+        const nextProfiles = profiles.filter((profile) => profile.node_id !== nodeId)
         setProfiles(nextProfiles)
         setSelectedId((current) => {
-          if (current && current !== agentId) return current
-          return nextProfiles[0]?.agent_id ?? null
+          if (current && current !== nodeId) return current
+          return nextProfiles[0]?.node_id ?? null
         })
       }
     } catch (err) {
-      setError(err?.message || 'Failed to delete profile.')
+      setError(err?.message || 'Failed to delete node.')
     } finally {
       setBusy(false)
     }
@@ -463,27 +476,27 @@ export default function Coordinator() {
     return (t.text || '').trim()
   })
 
-  const selected = profiles.find((profile) => profile.agent_id === selectedId) || null
+  const selected = profiles.find((profile) => profile.node_id === selectedId) || null
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
       <aside className="flex min-h-[70vh] flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
         <div className="border-b border-white/5 px-4 py-3">
           <div className="text-sm font-semibold text-slate-200">Roster</div>
-          <div className="text-xs text-slate-500">{profiles.length} profiles</div>
+          <div className="text-xs text-slate-500">{profiles.length} nodes</div>
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-3">
           {profiles.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-500">
-              No profiles yet.
+              No nodes yet.
             </div>
           ) : (
             profiles.map((profile) => (
               <div
-                key={profile.agent_id}
+                key={profile.node_id}
                 className={`block w-full rounded-xl border p-3 text-left transition ${
-                  selectedId === profile.agent_id
+                  selectedId === profile.node_id
                     ? 'border-orange-500/40 bg-orange-500/10 shadow-lg shadow-orange-950/20'
                     : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-white/[0.03]'
                 }`}
@@ -491,15 +504,15 @@ export default function Coordinator() {
                 <div className="flex items-start justify-between gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedId(profile.agent_id)}
+                    onClick={() => setSelectedId(profile.node_id)}
                     className="min-w-0 flex-1 text-left"
                   >
                     <div className="truncate text-sm font-semibold text-slate-100">{profile.name}</div>
-                    <div className="mt-1 font-mono text-[11px] text-slate-500">{profile.agent_id}</div>
+                    <div className="mt-1 font-mono text-[11px] text-slate-500">{profile.node_id}</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => void removeProfile(profile.agent_id)}
+                    onClick={() => void removeNode(profile.node_id)}
                     className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-rose-500/30 hover:text-rose-300"
                     aria-label={`Delete ${profile.name}`}
                   >
@@ -508,7 +521,8 @@ export default function Coordinator() {
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">
-                  <RolePill role={profile.role} />
+                  <ProviderPill provider={profile.provider} />
+                  <TagPills tags={profile.tags} />
                   <StatusBadge status={profile.status || 'idle'} />
                 </div>
               </div>
@@ -528,18 +542,26 @@ export default function Coordinator() {
                   placeholder="Agent name"
                 />
               </Field>
-              <Field label="Role">
+              <Field label="Provider">
                 <select
-                  value={form.role}
-                  onChange={(event) => updateField('role', event.target.value)}
+                  value={form.provider}
+                  onChange={(event) => updateField('provider', event.target.value)}
                   className={INPUT}
                 >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role} className="bg-[#0b0e14]">
-                      {role}
+                  {catalog.providers.map((group) => (
+                    <option key={group.provider} value={group.provider} className="bg-[#0b0e14]">
+                      {group.provider}
                     </option>
                   ))}
                 </select>
+              </Field>
+              <Field label="Tags">
+                <input
+                  value={form.tags_input}
+                  onChange={(event) => updateField('tags_input', event.target.value)}
+                  className={INPUT}
+                  placeholder="architect, design"
+                />
               </Field>
               <Field label="Rules">
                 <div className="flex flex-wrap gap-1.5">
@@ -647,7 +669,7 @@ export default function Coordinator() {
               onClick={() => setShowForm(true)}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10"
             >
-              Add Profile
+              Add Node
             </button>
           )}
         </div>
@@ -659,10 +681,11 @@ export default function Coordinator() {
             <div className="border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <div className="text-lg font-semibold text-slate-100">{selected.name}</div>
-                <RolePill role={selected.role} />
+                <ProviderPill provider={selected.provider} />
+                <TagPills tags={selected.tags} />
                 <StatusBadge status={selected.status || 'idle'} />
               </div>
-              <div className="mt-2 font-mono text-xs text-slate-500">{selected.agent_id}</div>
+              <div className="mt-2 font-mono text-xs text-slate-500">{selected.node_id}</div>
               <div className="mt-4">
                 <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">Threads</div>
                 <div className="flex flex-wrap gap-2">
@@ -671,7 +694,7 @@ export default function Coordinator() {
                       <button
                         key={thread.id}
                         type="button"
-                        onClick={() => void loadThreadsFor(selected.agent_id, thread.id)}
+                        onClick={() => void loadThreadsFor(selected.node_id, thread.id)}
                         className={`rounded-full border px-3 py-1 text-xs transition ${
                           selectedThreadId === thread.id
                             ? 'border-orange-400/40 bg-orange-500/10 text-orange-100'
@@ -746,7 +769,7 @@ export default function Coordinator() {
                   })
                 ) : (
                   <div className="grid min-h-[220px] place-items-center text-center text-slate-600">
-                    Open a profile thread or send the first message to start one.
+                    Open a node thread or send the first message to start one.
                   </div>
                 )}
               </div>
@@ -825,7 +848,7 @@ export default function Coordinator() {
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${spawnCard.gating === 'green' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'}`}>
                     {spawnCard.gating === 'green' ? '✓ Ready to Spawn' : '⚠ Spawn (with failures)'}
                   </span>
-                  <span className="text-xs text-slate-400">→ <strong>{spawnCard.prefill_role}</strong>: {spawnCard.prefill_task}</span>
+                  <span className="text-xs text-slate-400">→ <strong>target</strong>: {spawnCard.prefill_role} · {spawnCard.prefill_task}</span>
                 </div>
                 {spawnCard.failures?.length > 0 && (
                   <ul className="mb-3 space-y-1">
@@ -889,7 +912,7 @@ export default function Coordinator() {
           </div>
         ) : (
           <div className="grid min-h-[70vh] place-items-center rounded-2xl border border-dashed border-white/10 bg-black/20 px-6 text-center text-sm text-slate-500">
-            Select a profile to start a conversation
+            Select a node to start a conversation
           </div>
         )}
       </section>

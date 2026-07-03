@@ -31,7 +31,7 @@ class G001ScopeAdherence(HephaestusRule):
                     rule_id=self.id,
                     severity=self.severity,
                     message=(
-                        f"Agent {ctx.actor or event.agent_id} wrote outside allowed paths: "
+                        f"Agent {ctx.actor or event.node_id} wrote outside allowed paths: "
                         f"{path!r} (allowed: {allowed})"
                     ),
                     artifact=path,
