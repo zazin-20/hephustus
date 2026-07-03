@@ -298,7 +298,7 @@ class DesktopApp:
             "thread_id": prepared.thread_id,
             "agent_id": prepared.agent_id,
             "role": prepared.task.role.value,
-            "tool": prepared.tool.value,
+            "tool": getattr(prepared.tool, "value", prepared.tool),
             "context": [p.name for p in prepared.ctx.files],
             "missing": [p.name for p in prepared.ctx.missing],
         }

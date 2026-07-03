@@ -1,8 +1,4 @@
-"""Role-based static routing (spec/architecture.md §5.3) and directive locations.
-
-Routing is intentionally static and role-based, not task-based — simple and
-debuggable for the MVP.
-"""
+"""Role definitions and default provider routing."""
 from __future__ import annotations
 
 from enum import Enum
@@ -19,19 +15,11 @@ class Role(str, Enum):
 
 
 class Tool(str, Enum):
+    """Compatibility enum for built-in providers."""
+
     CLAUDE = "claude"
     CODEX = "codex"
 
-
-ROLE_TOOL: dict[Role, Tool] = {
-    Role.ORCHESTRATOR: Tool.CLAUDE,
-    Role.PRODUCT_MANAGER: Tool.CLAUDE,
-    Role.ARCHITECT: Tool.CLAUDE,
-    Role.WORKER: Tool.CODEX,
-    Role.QA: Tool.CLAUDE,
-    Role.DESIGNER: Tool.CLAUDE,
-    Role.DEVOPS: Tool.CLAUDE,
-}
 
 # Directive file per role, relative to the agents/ tree (from index.md registry).
 ROLE_DIRECTIVE: dict[Role, str] = {
@@ -45,5 +33,11 @@ ROLE_DIRECTIVE: dict[Role, str] = {
 }
 
 
-def tool_for(role: Role | str) -> Tool:
-    return ROLE_TOOL[Role(role)]
+def tool_for(role: Role | str, *, registry=None) -> Tool | str:
+    from hephaestus.integration.providers import provider_registry
+
+    provider = (registry or provider_registry()).provider_for_role(role)
+    try:
+        return Tool(provider)
+    except ValueError:
+        return provider

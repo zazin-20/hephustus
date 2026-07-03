@@ -10,7 +10,8 @@ from hephaestus.store.runs import create_run
 from hephaestus.store.threads import get_or_create_thread
 from hephaestus.store.profiles import create_profile
 from hephaestus.store.trace import TraceEvent, append_trace_event, list_trace_events
-from hephaestus.integration.runners import _codex_event, _extract_target_path
+from hephaestus.integration.providers import _codex_normalize_event
+from hephaestus.integration.runners import _extract_target_path
 
 
 def _db(tmp_path: Path) -> Path:
@@ -135,7 +136,7 @@ def test_codex_function_call_emits_tool_call():
             "arguments": {"cmd": "py -m pytest"},
         },
     }
-    ev = _codex_event(raw)
+    ev = _codex_normalize_event(raw)
     assert ev.kind == "tool_call"
     assert ev.text == "shell"
     assert ev.raw["action"] == "shell"
@@ -147,5 +148,5 @@ def test_codex_agent_message_not_tool_call():
         "type": "item.completed",
         "item": {"type": "agent_message", "text": "Hello"},
     }
-    ev = _codex_event(raw)
+    ev = _codex_normalize_event(raw)
     assert ev.kind == "text"

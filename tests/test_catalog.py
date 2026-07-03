@@ -5,6 +5,7 @@ so tests assert structure/invariants rather than a hardcoded model list."""
 import json
 
 import hephaestus.catalog as catalog_mod
+import hephaestus.integration.providers as providers_mod
 from hephaestus.catalog import catalog, discover_claude, discover_codex
 from hephaestus.integration.routing import Tool
 
@@ -59,6 +60,7 @@ def test_codex_reads_per_model_efforts_from_cache(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(catalog_mod, "_CODEX_CACHE", cache)
+    monkeypatch.setattr(providers_mod, "_CODEX_CACHE", cache)
 
     codex = discover_codex()
     ids = {m["id"] for m in codex["models"]}
@@ -69,6 +71,7 @@ def test_codex_reads_per_model_efforts_from_cache(tmp_path, monkeypatch):
 
 def test_codex_falls_back_when_cache_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog_mod, "_CODEX_CACHE", tmp_path / "nope.json")
+    monkeypatch.setattr(providers_mod, "_CODEX_CACHE", tmp_path / "nope.json")
     codex = discover_codex()
     assert codex["provider"] == Tool.CODEX.value
     assert codex["models"]  # non-empty fallback

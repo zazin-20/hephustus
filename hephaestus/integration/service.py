@@ -7,10 +7,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import AsyncIterator
 
-from hephaestus.catalog import provider_for_model
 from hephaestus.contract import ExecutionContract
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.integration.context import SessionContext, build_session_context
+from hephaestus.integration.providers import ProviderRegistry, provider_key, provider_registry
 from hephaestus.integration.routing import Role, Tool, tool_for
 from hephaestus.integration.runners import (
     AgentEvent,
@@ -70,12 +70,23 @@ class PreparedRun:
     agent_id: str
     thread_id: str
     run_id: str
-    tool: Tool
+    tool: Tool | str
     ctx: SessionContext
 
 
-def default_runners() -> dict[Tool, AgentRunner]:
-    return {Tool.CLAUDE: ClaudeRunner(), Tool.CODEX: CodexRunner()}
+def _display_tool(provider: str) -> Tool | str:
+    try:
+        return Tool(provider)
+    except ValueError:
+        return provider
+
+
+def _normalize_runners(runners: dict[Tool | str, AgentRunner]) -> dict[str, AgentRunner]:
+    return {provider_key(key): runner for key, runner in runners.items()}
+
+
+def default_runners(registry: ProviderRegistry | None = None) -> dict[str, AgentRunner]:
+    return (registry or provider_registry()).runners()
 
 
 def _compile_history(db_path, thread_id: str, current_run_id: str) -> str:
@@ -91,19 +102,23 @@ def _compile_history(db_path, thread_id: str, current_run_id: str) -> str:
 
 
 class AgentService:
-    def __init__(self, root: str | Path, runners: dict[Tool, AgentRunner] | None = None):
+    def __init__(
+        self,
+        root: str | Path,
+        runners: dict[Tool | str, AgentRunner] | None = None,
+        registry: ProviderRegistry | None = None,
+    ):
         self.root = Path(root).resolve()
         self.state_db_path = self.root / ".hephaestus" / "state.db"
-        self.runners = runners or default_runners()
+        self.provider_registry = registry or provider_registry()
+        self.runners = _normalize_runners(runners) if runners is not None else default_runners(self.provider_registry)
         self.registry = SessionRegistry()
         self._locks: dict[str, asyncio.Lock] = {}
         interrupt_running_runs(self.state_db_path)
 
-    def resolve(self, task: AgentTask) -> tuple[Tool, SessionContext]:
-        # The chosen model decides the provider/runner; fall back to role routing
-        # only when no model is set. (Picking gpt-5.4 must go to Codex, not Claude.)
-        provider = provider_for_model(task.model)
-        tool = Tool(provider) if provider is not None else tool_for(task.role)
+    def resolve(self, task: AgentTask) -> tuple[Tool | str, SessionContext]:
+        provider = self.provider_registry.provider_for_model(task.model)
+        tool = _display_tool(provider) if provider is not None else tool_for(task.role, registry=self.provider_registry)
         ctx = build_session_context(self.root, task.role, task.issue_id)
         return tool, ctx
 
@@ -235,7 +250,7 @@ class AgentService:
             ctx = replace(ctx, system_prompt=history + "\n\n" + ctx.system_prompt if ctx.system_prompt else history)
             prepared = replace(prepared, ctx=ctx)
 
-        runner = self.runners[prepared.tool]
+        runner = self.runners[provider_key(prepared.tool)]
         lock = self._locks.setdefault(prepared.agent_id, asyncio.Lock())
         usage = None
         actual_model = contract.actual_model
@@ -331,7 +346,7 @@ class AgentService:
         self,
         profile: Profile,
         task: AgentTask,
-        tool: Tool,
+        tool: Tool | str,
         *,
         context: str,
     ) -> ExecutionContract:
@@ -344,7 +359,7 @@ class AgentService:
             effort=task.effort or profile.effort,
             tools=[],
             prompt=task.prompt,
-            tool=tool.value,
+            tool=provider_key(tool),
             issue_id=task.issue_id,
             cwd=str(task.cwd) if task.cwd else profile.working_dir,
             resume=task.resume,

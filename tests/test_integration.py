@@ -8,8 +8,20 @@ import pytest
 
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.context import SessionContext, build_session_context
+from hephaestus.integration.providers import (
+    _claude_flags,
+    _claude_normalize_event,
+    _codex_normalize_event,
+)
 from hephaestus.integration.routing import Role, Tool, tool_for
-from hephaestus.integration.runners import AgentEvent, AgentTask, EchoRunner, build_codex_argv
+from hephaestus.integration.runners import (
+    AgentEvent,
+    AgentTask,
+    ClaudeRunner,
+    CodexRunner,
+    EchoRunner,
+    build_codex_argv,
+)
 from hephaestus.integration.service import AgentService, PreparedRun, SessionRegistry
 from hephaestus.store.db import connect
 from hephaestus.store.profiles import create_profile
@@ -64,14 +76,13 @@ def test_context_reports_missing_files(tmp_path):
 
 def test_codex_event_parses_real_schema():
     """Locks in the codex-cli 0.130.0 JSONL schema observed in live testing."""
-    from hephaestus.integration.runners import _codex_event
-
-    msg = _codex_event({"type": "item.completed",
-                        "item": {"id": "item_0", "type": "agent_message", "text": "HELLO"}})
+    msg = _codex_normalize_event(
+        {"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": "HELLO"}}
+    )
     assert msg.kind == "text"
     assert msg.text == "HELLO"
 
-    done = _codex_event({"type": "turn.completed", "usage": {"output_tokens": 3}})
+    done = _codex_normalize_event({"type": "turn.completed", "usage": {"output_tokens": 3}})
     assert done.kind == "result"
     assert done.raw["usage"]["output_tokens"] == 3
 
@@ -181,8 +192,6 @@ def test_service_skips_empty_lifecycle_turns(tmp_path):
 def test_claude_event_captures_thinking_and_text():
     """Agent reasoning (thinking blocks) must not be dropped — it's surfaced as a
     'thinking' event alongside the spoken text."""
-    from hephaestus.integration.runners import _claude_event
-
     class _Blk:
         def __init__(self, **kw):
             self.__dict__.update(kw)
@@ -195,7 +204,7 @@ def test_claude_event_captures_thinking_and_text():
         _Blk(type="thinking", thinking="weighing the options"),
         _Blk(type="text", text="here is my answer"),
     ]
-    result = _claude_event(msg)
+    result = _claude_normalize_event(msg)
     by_kind = {e.kind: e.text for e in (result if isinstance(result, list) else [result])}
     assert by_kind.get("thinking") == "weighing the options"
     assert by_kind.get("text") == "here is my answer"
@@ -203,39 +212,35 @@ def test_claude_event_captures_thinking_and_text():
 
 def test_decode_codex_line_handles_oversized_line():
     """A JSONL line far larger than asyncio's 64KB readline cap must decode fine."""
-    from hephaestus.integration.runners import _decode_codex_line
-
+    runner = CodexRunner(normalize_event=_codex_normalize_event)
     big = "x" * (200_000)
     line = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": big}})
-    ev = _decode_codex_line(line.encode("utf-8"))
+    ev = runner.decode_event_line(line.encode("utf-8"))
     assert ev.kind == "text"
     assert ev.text == big
 
 
 def test_decode_codex_line_blank_is_none():
-    from hephaestus.integration.runners import _decode_codex_line
-
-    assert _decode_codex_line(b"   ") is None
+    runner = CodexRunner(normalize_event=_codex_normalize_event)
+    assert runner.decode_event_line(b"   ") is None
 
 
 def test_codex_event_maps_reasoning_to_thinking():
-    from hephaestus.integration.runners import _codex_event
-
-    ev = _codex_event({"type": "item.completed", "item": {"type": "reasoning", "text": "let me think"}})
+    ev = _codex_normalize_event({"type": "item.completed", "item": {"type": "reasoning", "text": "let me think"}})
     assert ev.kind == "thinking"
     assert ev.text == "let me think"
 
 
 def test_codex_event_captures_command_execution_as_tool_call():
     """Real codex exec --json reports shell tool calls as command_execution items."""
-    from hephaestus.integration.runners import _codex_event, _extract_target_path
+    from hephaestus.integration.runners import _extract_target_path
 
     raw = {
         "type": "item.completed",
         "item": {"type": "command_execution", "command": "echo hi", "exit_code": 0},
     }
     raw["item"]["aggregated_output"] = "hi\n"
-    ev = _codex_event(raw)
+    ev = _codex_normalize_event(raw)
     assert ev.kind == "tool_call"
     assert ev.raw["action"] == "shell"
     assert _extract_target_path(ev.raw["input"]) == "echo hi"
@@ -272,35 +277,30 @@ def test_trace_persists_and_queryable_by_thread(tmp_path):
 
 
 def test_codex_event_function_call_parses_string_arguments():
-    from hephaestus.integration.runners import _codex_event
-
     raw = {
         "type": "item.completed",
         "item": {"type": "function_call", "name": "search", "arguments": '{"query": "x"}'},
     }
-    ev = _codex_event(raw)
+    ev = _codex_normalize_event(raw)
     assert ev.kind == "tool_call"
     assert ev.raw == {"action": "search", "input": {"query": "x"}}
 
 
 def test_codex_event_ignores_item_started_to_avoid_duplicate_tool_calls():
     """item.started carries the same item; only item.completed should emit a tool_call."""
-    from hephaestus.integration.runners import _codex_event
-
     raw = {
         "type": "item.started",
         "item": {"type": "command_execution", "command": "echo hi", "status": "in_progress"},
     }
-    ev = _codex_event(raw)
+    ev = _codex_normalize_event(raw)
     assert ev.kind != "tool_call"
 
 
 def test_claude_options_pass_effort():
     pytest.importorskip("claude_agent_sdk")
-    from hephaestus.integration.runners import _claude_options
-
     ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[], system_prompt="")
-    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x", effort="xhigh"))
+    runner = ClaudeRunner(normalize_event=_claude_normalize_event, flag_resolver=_claude_flags)
+    opts = runner.build_options(ctx, _contract(role="architect", model=None, prompt="x", effort="xhigh"))
     assert getattr(opts, "effort", None) == "xhigh"
 
 
@@ -524,11 +524,10 @@ def test_session_registry_keys():
 def test_claude_options_actually_inject_context():
     """Guards the silent-drop bug: OKF context must reach ClaudeAgentOptions."""
     pytest.importorskip("claude_agent_sdk")
-    from hephaestus.integration.runners import _claude_options
-
     ctx = SessionContext(role=Role.ARCHITECT, issue_id=None, files=[], missing=[],
                          system_prompt="OKF DIRECTIVE CONTENT")
-    opts = _claude_options(ctx, _contract(role="architect", model=None, prompt="x"))
+    runner = ClaudeRunner(normalize_event=_claude_normalize_event, flag_resolver=_claude_flags)
+    opts = runner.build_options(ctx, _contract(role="architect", model=None, prompt="x"))
     assert "OKF DIRECTIVE CONTENT" in str(opts.system_prompt)
 
 
