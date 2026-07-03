@@ -156,7 +156,7 @@ def test_parse_marker_from_trace_scans_tool_command_strings():
         TraceEvent(
             id="trace-1",
             run_id="run-1",
-            agent_id="worker-1",
+            node_id="worker-1",
             ts="2026-07-03T00:00:00Z",
             action="shell",
             target_path=None,
@@ -165,7 +165,7 @@ def test_parse_marker_from_trace_scans_tool_command_strings():
         TraceEvent(
             id="trace-2",
             run_id="run-1",
-            agent_id="worker-1",
+            node_id="worker-1",
             ts="2026-07-03T00:00:01Z",
             action="shell",
             target_path=None,
