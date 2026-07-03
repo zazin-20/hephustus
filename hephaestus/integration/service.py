@@ -74,15 +74,43 @@ class AgentService:
         self._locks: dict[str, asyncio.Lock] = {}
         interrupt_running_runs(self.state_db_path)
 
+    def _session_context(
+        self,
+        *,
+        node: Node,
+        task: AgentTask,
+        workflow_id: str | None,
+        workflow_run_id: str | None,
+        placement_id: str | None,
+        thread_id: str | None = None,
+    ) -> SessionContext:
+        return build_session_context(
+            self.root,
+            node_id=node.node_id,
+            tags=node.tags,
+            issue_id=task.issue_id,
+            inputs=node.inputs,
+            outputs=node.outputs,
+            db_path=self.state_db_path,
+            workflow_id=workflow_id,
+            workflow_run_id=workflow_run_id,
+            placement_id=placement_id,
+            thread_id=thread_id,
+            machine=str(self.root),
+        )
+
     def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[Tool | str, SessionContext]:
         resolved = node or self._resolve_node(task)
         provider = self.provider_registry.provider_for_model(task.model) or task.provider or resolved.provider
         tool = _display_tool(provider)
-        ctx = build_session_context(
-            self.root,
-            node_id=resolved.node_id,
-            tags=resolved.tags,
-            issue_id=task.issue_id,
+        workflow_id = task.workflow_id or task.issue_id or None
+        placement_id = task.placement_id or (resolved.node_id if workflow_id else None)
+        ctx = self._session_context(
+            node=resolved,
+            task=task,
+            workflow_id=workflow_id,
+            workflow_run_id=task.workflow_run_id or None,
+            placement_id=placement_id,
         )
         return tool, ctx
 
@@ -200,7 +228,8 @@ class AgentService:
 
     def begin(self, task: AgentTask) -> PreparedRun:
         node = self._resolve_node(task)
-        tool, ctx = self.resolve(task, node)
+        provider = self.provider_registry.provider_for_model(task.model) or task.provider or node.provider
+        tool = _display_tool(provider)
         workflow_id = task.workflow_id or task.issue_id or None
         workflow_run_id = task.workflow_run_id or uuid4().hex
         placement_id = task.placement_id or (node.node_id if workflow_id else None)
@@ -212,6 +241,14 @@ class AgentService:
             workflow_run_id=workflow_run_id,
             placement_id=placement_id,
             issue_id=task.issue_id,
+        )
+        ctx = self._session_context(
+            node=node,
+            task=task,
+            workflow_id=workflow_id,
+            workflow_run_id=workflow_run_id,
+            placement_id=placement_id,
+            thread_id=thread.id,
         )
         contract = self._contract(
             node,
