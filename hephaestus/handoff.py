@@ -10,13 +10,18 @@ import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Iterable
 
 from hephaestus.core import Violation
 from hephaestus.rules.base import HephaestusRule
 
 # Matches JSON objects anywhere in a string (greedy outer braces)
 _JSON_OBJECT_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}", re.DOTALL)
+_MARKER_SENTINEL = "@@HEPHAESTUS@@"
+_MARKER_LINE_RE = re.compile(
+    rf"(?m)^[ \t]*{re.escape(_MARKER_SENTINEL)}[ \t]+(.+)$"
+)
+_DISTILLATION_SCOPES = {"global", "machine", "workflow", "tag", "node"}
 
 
 @dataclass(frozen=True)
@@ -24,6 +29,22 @@ class HandoffMarker:
     role: str
     task: str
     issue_id: str
+
+
+@dataclass(frozen=True)
+class SkillCompleteMarker:
+    skill: str
+    ok: bool
+
+
+@dataclass(frozen=True)
+class DistillationCandidateMarker:
+    topic_key: str
+    scope: str
+    directive: str
+
+
+Marker = HandoffMarker | SkillCompleteMarker | DistillationCandidateMarker
 
 
 class SpawnGating(str, Enum):
@@ -53,25 +74,54 @@ def parse_handoff(text: str) -> HandoffMarker | None:
     "role", "task", and "issue_id" string fields.  Non-JSON text and JSON
     objects that don't match the schema are silently ignored.
     """
-    for match in _JSON_OBJECT_RE.finditer(text):
-        raw = match.group(0)
-        try:
-            obj: Any = json.loads(raw)
-        except json.JSONDecodeError:
+    candidates: list[tuple[int, str, str]] = []
+    candidates.extend((match.start(), "protocol", match.group(1)) for match in _MARKER_LINE_RE.finditer(text))
+    candidates.extend((match.start(), "legacy", match.group(0)) for match in _JSON_OBJECT_RE.finditer(text))
+
+    for _, kind, raw in sorted(candidates, key=lambda item: item[0]):
+        if kind == "protocol":
+            marker = _parse_protocol_marker(raw)
+            if isinstance(marker, HandoffMarker):
+                return marker
             continue
-        if not isinstance(obj, dict):
+        marker = _parse_legacy_handoff(raw)
+        if marker is not None:
+            return marker
+    return None
+
+
+def parse_marker(text: str) -> Marker | None:
+    """Extract the first valid protocol marker from *text*."""
+    for match in _MARKER_LINE_RE.finditer(text):
+        marker = _parse_protocol_marker(match.group(1))
+        if marker is not None:
+            return marker
+    return None
+
+
+def parse_marker_from_turns(turns: Iterable[Any]) -> Marker | None:
+    """Scan assistant text turns for the first valid protocol marker."""
+    for turn in turns:
+        if getattr(turn, "role", None) != "assistant":
             continue
-        inner = obj.get("handoff")
-        if not isinstance(inner, dict):
+        if getattr(turn, "kind", None) == "thinking":
             continue
-        role = inner.get("role")
-        task = inner.get("task")
-        issue_id = inner.get("issue_id")
-        if not (isinstance(role, str) and isinstance(task, str) and isinstance(issue_id, str)):
+        text = getattr(turn, "text", None)
+        if not isinstance(text, str):
             continue
-        if not (role and task and issue_id):
-            continue
-        return HandoffMarker(role=role, task=task, issue_id=issue_id)
+        marker = parse_marker(text)
+        if marker is not None:
+            return marker
+    return None
+
+
+def parse_marker_from_trace(trace: Iterable[Any]) -> Marker | None:
+    """Scan tool-call command strings for the first valid protocol marker."""
+    for event in trace:
+        for command in _iter_trace_command_strings(getattr(event, "raw", None)):
+            marker = parse_marker(command)
+            if marker is not None:
+                return marker
     return None
 
 
@@ -95,3 +145,91 @@ def evaluate_spawn_gate(
 
     gating = SpawnGating.GREEN if not failures else SpawnGating.AMBER
     return SpawnCard(marker=marker, gating=gating, failures=failures)
+
+
+def _parse_legacy_handoff(raw: str) -> HandoffMarker | None:
+    try:
+        obj: Any = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    return _handoff_marker_from_payload(obj.get("handoff"))
+
+
+def _parse_protocol_marker(raw: str) -> Marker | None:
+    obj = _parse_strict_json_object(raw)
+    if obj is None:
+        return None
+
+    version = obj.get("v")
+    marker_type = obj.get("type")
+    if version != 1 or not isinstance(marker_type, str):
+        return None
+
+    if marker_type == "handoff":
+        return _handoff_marker_from_payload(obj)
+    if marker_type == "skill_complete":
+        skill = obj.get("skill")
+        ok = obj.get("ok")
+        if isinstance(skill, str) and skill and isinstance(ok, bool):
+            return SkillCompleteMarker(skill=skill, ok=ok)
+        return None
+    if marker_type == "distillation_candidate":
+        topic_key = obj.get("topic_key")
+        scope = obj.get("scope")
+        directive = obj.get("directive")
+        if (
+            isinstance(topic_key, str)
+            and topic_key
+            and isinstance(scope, str)
+            and scope in _DISTILLATION_SCOPES
+            and isinstance(directive, str)
+            and directive
+        ):
+            return DistillationCandidateMarker(
+                topic_key=topic_key,
+                scope=scope,
+                directive=directive,
+            )
+        return None
+    return None
+
+
+def _parse_strict_json_object(raw: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    try:
+        obj, end = decoder.raw_decode(raw)
+    except json.JSONDecodeError:
+        return None
+    if raw[end:].strip():
+        return None
+    if not isinstance(obj, dict):
+        return None
+    return obj
+
+
+def _handoff_marker_from_payload(payload: Any) -> HandoffMarker | None:
+    if not isinstance(payload, dict):
+        return None
+    role = payload.get("role")
+    task = payload.get("task")
+    issue_id = payload.get("issue_id")
+    if not (isinstance(role, str) and isinstance(task, str) and isinstance(issue_id, str)):
+        return None
+    if not (role and task and issue_id):
+        return None
+    return HandoffMarker(role=role, task=task, issue_id=issue_id)
+
+
+def _iter_trace_command_strings(raw: Any) -> Iterable[str]:
+    if isinstance(raw, dict):
+        for key, value in raw.items():
+            if key == "command" and isinstance(value, str):
+                yield value
+            else:
+                yield from _iter_trace_command_strings(value)
+        return
+    if isinstance(raw, list):
+        for item in raw:
+            yield from _iter_trace_command_strings(item)

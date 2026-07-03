@@ -4,8 +4,13 @@ from __future__ import annotations
 import json
 import pytest
 from hephaestus.handoff import (
+    DistillationCandidateMarker,
     HandoffMarker,
+    SkillCompleteMarker,
     parse_handoff,
+    parse_marker,
+    parse_marker_from_trace,
+    parse_marker_from_turns,
     SpawnCard,
     SpawnGating,
     evaluate_spawn_gate,
@@ -14,6 +19,8 @@ from hephaestus.rules.base import HephaestusRule
 from hephaestus.core import Severity, Violation, ViolationResult
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.index import build_context
+from hephaestus.store.threads import Turn
+from hephaestus.store.trace import TraceEvent
 
 
 # ---------- HandoffMarker parsing ----------
@@ -62,6 +69,116 @@ def test_parse_handoff_partial_match_prefers_first():
     marker = parse_handoff(first + " " + second)
     assert marker is not None
     assert marker.role == "qa"
+
+
+def test_parse_handoff_protocol_marker():
+    text = '\n'.join([
+        "Implementation complete.",
+        '@@HEPHAESTUS@@ {"v":1,"type":"handoff","role":"qa","task":"verify issue-017","issue_id":"issue-017"}',
+    ])
+    marker = parse_handoff(text)
+    assert marker == HandoffMarker(role="qa", task="verify issue-017", issue_id="issue-017")
+
+
+def test_parse_marker_handoff_protocol():
+    text = '\n'.join([
+        "Implementation complete.",
+        '@@HEPHAESTUS@@ {"v":1,"type":"handoff","role":"qa","task":"verify issue-017","issue_id":"issue-017"}',
+    ])
+    marker = parse_marker(text)
+    assert marker == HandoffMarker(role="qa", task="verify issue-017", issue_id="issue-017")
+
+
+def test_parse_marker_skill_complete_protocol():
+    marker = parse_marker(
+        '@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"grill-me","ok":true}'
+    )
+    assert marker == SkillCompleteMarker(skill="grill-me", ok=True)
+
+
+def test_parse_marker_distillation_candidate_protocol():
+    marker = parse_marker(
+        '@@HEPHAESTUS@@ {"v":1,"type":"distillation_candidate","topic_key":"gh-auth","scope":"machine","directive":"Use gh auth status before fetching issues."}'
+    )
+    assert marker == DistillationCandidateMarker(
+        topic_key="gh-auth",
+        scope="machine",
+        directive="Use gh auth status before fetching issues.",
+    )
+
+
+def test_parse_marker_malformed_skipped_first_valid_wins():
+    text = '\n'.join([
+        '@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"grill-me","ok":"yes"}',
+        '@@HEPHAESTUS@@ {"v":1,"type":"handoff","role":"qa","task":"verify issue-017","issue_id":"issue-017"}',
+        '@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"later","ok":true}',
+    ])
+    marker = parse_marker(text)
+    assert marker == HandoffMarker(role="qa", task="verify issue-017", issue_id="issue-017")
+
+
+def test_parse_marker_ignores_in_prose_mentions():
+    text = 'Please do not emit @@HEPHAESTUS@@ {"v":1,"type":"handoff","role":"qa","task":"verify","issue_id":"issue-017"} in prose.'
+    assert parse_marker(text) is None
+
+
+def test_parse_marker_from_turns_ignores_thinking_turns():
+    turns = [
+        Turn(
+            id="turn-1",
+            thread_id="thread-1",
+            run_id="run-1",
+            seq=1,
+            role="assistant",
+            kind="thinking",
+            text='@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"grill-me","ok":true}',
+            included=True,
+            created_at="2026-07-03T00:00:00Z",
+        ),
+        Turn(
+            id="turn-2",
+            thread_id="thread-1",
+            run_id="run-1",
+            seq=2,
+            role="assistant",
+            kind="text",
+            text='@@HEPHAESTUS@@ {"v":1,"type":"handoff","role":"qa","task":"verify issue-017","issue_id":"issue-017"}',
+            included=True,
+            created_at="2026-07-03T00:00:01Z",
+        ),
+    ]
+    marker = parse_marker_from_turns(turns)
+    assert marker == HandoffMarker(role="qa", task="verify issue-017", issue_id="issue-017")
+
+
+def test_parse_marker_from_trace_scans_tool_command_strings():
+    trace = [
+        TraceEvent(
+            id="trace-1",
+            run_id="run-1",
+            agent_id="worker-1",
+            ts="2026-07-03T00:00:00Z",
+            action="shell",
+            target_path=None,
+            raw={"action": "shell", "input": {"command": "echo ok"}},
+        ),
+        TraceEvent(
+            id="trace-2",
+            run_id="run-1",
+            agent_id="worker-1",
+            ts="2026-07-03T00:00:01Z",
+            action="shell",
+            target_path=None,
+            raw={
+                "action": "shell",
+                "input": {
+                    "command": '\n@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"grill-me","ok":true}\n',
+                },
+            },
+        ),
+    ]
+    marker = parse_marker_from_trace(trace)
+    assert marker == SkillCompleteMarker(skill="grill-me", ok=True)
 
 
 # ---------- SpawnCard + exit-rule gating ----------
