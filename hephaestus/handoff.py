@@ -10,6 +10,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import chain
 from typing import Any, Iterable
 
 from hephaestus.core import Violation
@@ -92,15 +93,24 @@ def parse_handoff(text: str) -> HandoffMarker | None:
 
 def parse_marker(text: str) -> Marker | None:
     """Extract the first valid protocol marker from *text*."""
-    for match in _MARKER_LINE_RE.finditer(text):
-        marker = _parse_protocol_marker(match.group(1))
-        if marker is not None:
-            return marker
-    return None
+    return next(iter_markers(text), None)
 
 
 def parse_marker_from_turns(turns: Iterable[Any]) -> Marker | None:
     """Scan assistant text turns for the first valid protocol marker."""
+    return next(iter_markers_from_turns(turns), None)
+
+
+def iter_markers(text: str) -> Iterable[Marker]:
+    """Yield every valid protocol marker in *text* in encounter order."""
+    for match in _MARKER_LINE_RE.finditer(text):
+        marker = _parse_protocol_marker(match.group(1))
+        if marker is not None:
+            yield marker
+
+
+def iter_markers_from_turns(turns: Iterable[Any]) -> Iterable[Marker]:
+    """Yield protocol markers from assistant text turns, ignoring thinking."""
     for turn in turns:
         if getattr(turn, "role", None) != "assistant":
             continue
@@ -109,20 +119,32 @@ def parse_marker_from_turns(turns: Iterable[Any]) -> Marker | None:
         text = getattr(turn, "text", None)
         if not isinstance(text, str):
             continue
-        marker = parse_marker(text)
-        if marker is not None:
-            return marker
-    return None
+        yield from iter_markers(text)
 
 
 def parse_marker_from_trace(trace: Iterable[Any]) -> Marker | None:
     """Scan tool-call command strings for the first valid protocol marker."""
+    return next(iter_markers_from_trace(trace), None)
+
+
+def iter_markers_from_trace(trace: Iterable[Any]) -> Iterable[Marker]:
+    """Yield protocol markers from tool-call command strings."""
     for event in trace:
         for command in _iter_trace_command_strings(getattr(event, "raw", None)):
-            marker = parse_marker(command)
-            if marker is not None:
-                return marker
-    return None
+            yield from iter_markers(command)
+
+
+def has_skill_completion(
+    skill: str,
+    *,
+    turns: Iterable[Any],
+    trace: Iterable[Any],
+) -> bool:
+    """Return True when the trace contains a successful completion marker."""
+    for marker in chain(iter_markers_from_turns(turns), iter_markers_from_trace(trace)):
+        if isinstance(marker, SkillCompleteMarker) and marker.skill == skill and marker.ok:
+            return True
+    return False
 
 
 def evaluate_spawn_gate(

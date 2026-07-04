@@ -9,11 +9,13 @@ from dataclasses import dataclass, field
 
 from hephaestus.index import OKFContext
 from hephaestus.store.trace import TraceEvent
+from hephaestus.store.threads import Turn
 
 
 @dataclass
 class EvaluationContext:
     okf: OKFContext
+    turns: list[Turn] = field(default_factory=list)
     trace: list[TraceEvent] = field(default_factory=list)
     contract: dict = field(default_factory=dict)
     actor: str = ""

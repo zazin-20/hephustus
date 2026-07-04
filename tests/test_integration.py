@@ -22,7 +22,7 @@ from hephaestus.integration.runners import (
     EchoRunner,
     build_codex_argv,
 )
-from hephaestus.integration.service import AgentService, PreparedRun
+from hephaestus.integration.service import AgentService, GovernanceViolationError, PreparedRun
 from hephaestus.store.db import connect
 from hephaestus.store.frozen_rules import upsert_frozen_rule
 from hephaestus.store.nodes import create_node
@@ -472,6 +472,79 @@ def test_service_injects_node_skill_playbooks(tmp_path):
     assert len(captured) == 1
     assert "# Skills" in captured[0]
     assert "GRILL ME PLAYBOOK" in captured[0]
+
+
+def test_service_allows_enforced_skill_obligation_when_marker_present(tmp_path):
+    class _SkillRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            yield AgentEvent(
+                "text",
+                '@@HEPHAESTUS@@ {"v":1,"type":"skill_complete","skill":"grill-me","ok":true}',
+            )
+            yield AgentEvent("result", "ok")
+
+    async def go():
+        runners = {Tool.CLAUDE: _SkillRunner(), Tool.CODEX: _SkillRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        worker = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="Worker",
+            provider="codex",
+            tags=["worker"],
+            rules=[],
+            skills=["skill:grill-me"],
+            skill_obligations=["skill:grill-me"],
+        )
+        prepared = service.begin(service.task_for_node(node_id=worker.node_id, prompt="use the skill"))
+        async for _ in service.run(prepared):
+            pass
+        return service, prepared
+
+    service, prepared = asyncio.run(go())
+    run = get_run(service.state_db_path, prepared.run_id)
+    with connect(service.state_db_path) as db:
+        violations = list_violations(db, run_id=prepared.run_id)
+    assert run.status == "done"
+    assert violations == []
+
+
+def test_service_raises_and_records_violation_when_enforced_skill_marker_missing(tmp_path):
+    class _SkillRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            yield AgentEvent("text", "done")
+            yield AgentEvent("result", "ok")
+
+    async def go():
+        runners = {Tool.CLAUDE: _SkillRunner(), Tool.CODEX: _SkillRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        worker = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="Worker",
+            provider="codex",
+            tags=["worker"],
+            rules=[],
+            skills=["skill:grill-me"],
+            skill_obligations=["skill:grill-me"],
+        )
+        prepared = service.begin(service.task_for_node(node_id=worker.node_id, prompt="use the skill"))
+        with pytest.raises(GovernanceViolationError) as excinfo:
+            async for _ in service.run(prepared):
+                pass
+        assert any(v.rule_id == "G-003" for v in excinfo.value.violations)
+        return service, prepared
+
+    service, prepared = asyncio.run(go())
+    run = get_run(service.state_db_path, prepared.run_id)
+    with connect(service.state_db_path) as db:
+        violations = list_violations(db, run_id=prepared.run_id)
+    assert any(v["rule_id"] == "G-003" for v in violations)
+    assert run.status == "error"
 
 
 def test_service_persists_actual_model_and_governance_violation(tmp_path):

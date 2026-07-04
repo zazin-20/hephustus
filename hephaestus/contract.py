@@ -23,6 +23,7 @@ class ExecutionContract:
     workflow_run_id: str | None = None
     placement_id: str | None = None
     allowed_paths: list[str] = field(default_factory=list)
+    skill_obligations: list[str] = field(default_factory=list)
     disallowed_tools: list[str] = field(default_factory=list)
     actual_model: str | None = None
 

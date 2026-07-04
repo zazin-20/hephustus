@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # V2: drop FK on violations.run_id so governance violations can be recorded
 # without a matching run row (e.g. triggered by rule scan, not by a runner).
@@ -272,6 +272,10 @@ ALTER TABLE violations_v3 RENAME TO violations;
 ALTER TABLE corrections_v3 RENAME TO corrections;
 """
 
+_SCHEMA_V4 = """
+ALTER TABLE nodes ADD COLUMN skill_obligations TEXT NOT NULL DEFAULT '[]';
+"""
+
 
 def dumps_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
@@ -317,6 +321,10 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         conn.executescript(_SCHEMA_V3)
         _set_schema_version(conn, 3)
         applied.append(3)
+    if current < 4:
+        conn.executescript(_SCHEMA_V4)
+        _set_schema_version(conn, 4)
+        applied.append(4)
 
     conn.commit()
     return applied
