@@ -1,7 +1,7 @@
 ---
 title: Architect
 role: architect
-updated: 2026-07-03
+updated: 2026-07-04
 owner: architect
 ---
 
@@ -24,7 +24,7 @@ issue specs, and reviews worker handoffs before QA.
 | `issues/` | Per-issue specs + `index.md` rollup (`completed/` when closed) |
 | `handoffs/` | Worker handoff records (`completed/` when closed) |
 | `prds/` | Final PRD storage |
-| `rules/` | Structural compliance rules (`structural.md`) |
+| `rules/` | Governance model doc (`structural.md`, formerly the S-rule library) |
 | `briefs/` | Reusable briefs handed to downstream roles |
 | `discussion/` | Design discussion notes |
 | `plans/` | Implementation / sequencing plans |
@@ -33,8 +33,10 @@ issue specs, and reviews worker handoffs before QA.
 
 ## Code-enforced paths
 
-These locations are consumed by `hephaestus/okf_layout.py` and the S-00x rules;
-do not relocate them:
+These locations are the OKF tree shape resolved by `hephaestus/okf_layout.py`
+(`issue_path`, `issues_index_path`, `handoff_path`); do not relocate them. The
+paths are code-enforced; the former `S-00x` rules that checked their *contents*
+were removed 2026-06-23 (governance is now user-authored specs + the G-rules):
 
 - `issues/{issue_id}.md`, `issues/index.md`
 - `handoffs/{issue_id}.md`

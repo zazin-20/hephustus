@@ -2,7 +2,7 @@
 title: Architect Directive
 role: architect
 tool: claude
-updated: 2026-07-03
+updated: 2026-07-04
 owner: architect
 ---
 
@@ -19,18 +19,29 @@ handoffs before QA verifies them.
    `## What to build` / `## Acceptance criteria` / `## Blocked by` sections
    are the `issues/{issue_id}.md` equivalent); no separate local spec file is
    authored per issue. A worker must never start without a corresponding
-   GitHub issue that carries these sections (rule **S-001**, revised
-   2026-07-03 — see `T-002` in `agents/orchestrator/tasks/completed/`). Only
+   GitHub issue that carries these sections (see `T-002` in
+   `agents/orchestrator/tasks/completed/` for the 2026-07-03 wording
+   resolution). Only
    write a local file under `issues/` when an issue needs elaboration beyond
    what fits in the GitHub body (e.g. a design brief); such files supplement,
    they do not replace, the GitHub issue.
+   > This "no worker without an issue spec" gate is a **process convention** —
+   > the former hardcoded rule `S-001` that expressed it was removed 2026-06-23
+   > when governance moved to user-authored specs. It is no longer code-enforced.
 3. **Dependency sequencing** — keep `issue-dag.md` current: what blocks what,
    which issues form the open wave, one dedicated owner per issue.
 4. **Handoff review** — review each worker handoff at `handoffs/{issue_id}.md`
-   and set `reviewed_by: architect` before QA starts (rule **S-005**).
+   and set `reviewed_by: architect` before QA starts. This gate is a **process
+   convention** — the former rule `S-005` that enforced it in code was removed
+   2026-06-23; no code checks `reviewed_by` today. The handoff *path* itself is
+   still the code-enforced location (`hephaestus/okf_layout.py`).
 5. **PRD storage** — final PRDs land in `prds/`.
-6. **Rules** — the structural compliance rules in `rules/structural.md` are the
-   invariants the whole pipeline is checked against.
+6. **Rules** — governance is now user-authored: artifact-spec predicates plus
+   the three run-time governance rules (`G-001`/`G-002`/`G-003` in
+   `hephaestus/rules/governance.py`, run by the generic
+   `hephaestus/rules/registry.py`). See `../../structural.md` (now the
+   governance-model doc) and `docs/design/governance-engine.md`. The former
+   hardcoded `S-001..S-006` structural library was removed 2026-06-23.
 
 ## Invariants to protect
 
@@ -47,5 +58,8 @@ handoffs before QA verifies them.
 ## References
 
 - [architecture.md](architecture.md), [issue-dag.md](issue-dag.md)
-- [rules/structural.md](rules/structural.md) — S-001…S-006
+- [structural.md](../../structural.md) — the governance model (formerly
+  the `S-001…S-006` library, removed 2026-06-23)
+- [../../docs/design/governance-engine.md](../../docs/design/governance-engine.md)
+  — canonical governance model
 - Layout seam: `hephaestus/okf_layout.py`

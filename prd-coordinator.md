@@ -118,7 +118,7 @@ A pure module that scans agent event text for the structured handoff signal the 
 Interface: `parse(text: str) -> HandoffMarker | None`. Called in the streaming path for Orchestrator sessions only. When a marker is detected, the event is emitted to the UI as a special `handoff` kind so the frontend can render the Spawn button.
 
 ### Per-profile exit rules (`rules/exit.py`)
-A new rule layer separate from the existing structural rules (S-001..S-006). Exit rules are named Python functions with a standard signature:
+A new rule layer separate from the then-existing structural rules (`S-001..S-006`, since removed 2026-06-23 — see the note at the end of this section). Exit rules are named Python functions with a standard signature:
 
 ```python
 def has_issue_spec(ctx: OKFContext, issue_id: str) -> RuleFailure | None: ...
@@ -127,13 +127,19 @@ def has_handoff_doc(ctx: OKFContext, issue_id: str) -> RuleFailure | None: ...
 
 A TOML config (`rules/exit_rules.toml`) maps profile rule names to their implementations. The evaluator `check_exit_rules(profile, issue_id) -> list[RuleFailure]` builds the OKF context and runs only the rules declared in the profile's `rules` list. Adding a rule = one TOML entry + one small Python function.
 
-The existing S-001..S-006 structural rules are unchanged and continue to run as the background compliance layer via the watchdog. Exit rules are the per-profile, per-handoff gate layer.
+Exit rules are the per-profile, per-handoff gate layer.
+
+> **Superseded (2026-06-23):** this section assumed the hardcoded `S-001..S-006`
+> structural library ran as a background compliance layer. That library was
+> removed; governance is now user-authored artifact-spec predicates plus the
+> run-time governance rules (`G-001`/`G-002`/`G-003`), run by the generic
+> `hephaestus/rules/registry.py`. See `docs/design/governance-engine.md`.
 
 ### Correction Box (`corrections.py`)
 Corrections are appended to `agents/hephaestus/corrections.jsonl`:
 
 ```json
-{"ts": "...", "violation": "S-002", "agent_id": "arch-001", "issue_id": "issue-004", "note": "Worker skipped handoff step."}
+{"ts": "...", "violation": "G-001", "agent_id": "arch-001", "issue_id": "issue-004", "note": "Agent wrote outside its allowed paths."}
 ```
 
 Interface: `append(correction: Correction)`. No promotion logic at this stage — the file is the raw feedback queue for manual review. Promotion to directives or rules is Phase 3.

@@ -1,7 +1,11 @@
 # Hephaestus
 
-OKF system manager and agent compliance layer. See [`architecture.md`](architecture.md)
-for the full design and [`structural.md`](structural.md) for the rule library.
+OKF system manager and agent compliance layer. The **canonical current design** is
+[`docs/design/governance-engine.md`](docs/design/governance-engine.md) — Hephaestus is a
+user-authored workflow governance engine. [`architecture.md`](architecture.md) and
+[`structural.md`](structural.md) are the earlier Phase-1 spec docs, partly superseded by
+the governance-engine model (they no longer describe a hardcoded `S-001..S-006` rule library —
+that was removed 2026-06-23).
 
 This README covers the **code** (Phase 1 core). The `*.md` design docs are the OKF spec.
 
@@ -16,9 +20,10 @@ hephaestus/
 ├── models.py        Pydantic OKF doc types — the Tier-1 schema layer
 ├── index.py         build_context() -> OKFContext (derived read cache over agents/)
 ├── rules/
-│   ├── base.py      HephaestusRule interface
-│   ├── structural.py S-001 .. S-006
-│   └── registry.py  run_rules() / run_all()
+│   ├── base.py       HephaestusRule interface (the check contract)
+│   ├── governance.py G-001/G-002/G-003 run-time governance rules + ALL_GOVERNANCE_RULES
+│   └── registry.py   run_rules() / run_all() / run_layer() — generic runner, no built-in
+│                     rule set (callers pass the rules; user-authored specs or the G-rules)
 ├── monitor.py       ComplianceMonitor: rescan + violation diff (added/resolved)
 ├── watch.py         watchdog + asyncio debounce pipeline; py -m hephaestus.watch
 ├── dashboard.py     snapshot(): pipeline rows + violations for the UI (§3.2)
@@ -35,7 +40,7 @@ tests/
 ## Running
 
 ```sh
-py -m pytest                       # 27 tests
+py -m pytest                       # run the full suite
 
 # desktop app — build the frontend once, then launch the native window
 npm --prefix frontend install
@@ -107,7 +112,8 @@ agents/
 | Frontmatter parser | ✅ |
 | Pydantic OKF models (Tier-1 schema) | ✅ |
 | OKF index / `OKFContext` | ✅ |
-| Structural rules S-001..S-006 | ✅ |
+| Governance rules G-001/G-002/G-003 + generic gate runner | ✅ |
+| User-authored artifact-spec predicates (governance-engine model) | 🚧 (design) |
 | watchdog validation pipeline (§5.4, §6.3) | ✅ |
 | Pipeline dashboard derivation (§3.2) | ✅ |
 | Desktop shell (PyWebView + React + Tailwind) | ✅ (MVP) |

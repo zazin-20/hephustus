@@ -2,7 +2,7 @@
 title: Worker Directive
 role: worker
 tool: codex
-updated: 2026-07-03
+updated: 2026-07-04
 owner: architect
 ---
 
@@ -18,18 +18,21 @@ time, via TDD, and you do not invent scope. You run on Codex (via codex-cc).
 
 ## Contract
 
-1. **Start from a spec** — the GitHub issue is the spec of record (**rule
-   S-001**, revised 2026-07-03): treat its `## What to build` / `## Acceptance
-   criteria` / `## Blocked by` sections as the definition of done. Only
-   consult `../architect/issues/{issue_id}.md` if one exists as supplementary
-   elaboration — its absence is not a blocker.
+1. **Start from a spec** — the GitHub issue is the spec of record (a process
+   convention; the former rule `S-001` was removed 2026-06-23): treat its
+   `## What to build` / `## Acceptance criteria` / `## Blocked by` sections as
+   the definition of done. Only consult `../architect/issues/{issue_id}.md` if
+   one exists as supplementary elaboration — its absence is not a blocker.
 2. **TDD** — follow [tdd.md](tdd.md): red → green → refactor, test through public
    behavior. Do not delete or weaken existing tests.
 3. **Architecture rules** — `.hephaestus/state.db` is written only through the
    typed DAL in `hephaestus/store/`; the OKF tree shape lives in
    `hephaestus/okf_layout.py`.
 4. **Leave a handoff** — on done, write `../architect/handoffs/{issue_id}.md`
-   with a `## Summary` (**rule S-002**). The Architect reviews before QA.
+   with a `## Summary`. The handoff *path* is the code-enforced location
+   (`hephaestus/okf_layout.py`); leaving the handoff is a process convention
+   (the former rule `S-002` that enforced it was removed 2026-06-23). The
+   Architect reviews before QA.
 
 ## You do NOT
 

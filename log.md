@@ -1,6 +1,6 @@
 ---
 title: Hephaestus System Log
-updated: 2026-06-22
+updated: 2026-07-04
 ---
 
 # Hephaestus System Log
@@ -485,3 +485,32 @@ Backend persistence was verified end-to-end (a `command_execution` persists as
 `('shell', 'echo hi')`). **Note:** the desktop app must be restarted to pick up the
 Python runner/bridge changes. **Tests:** 155 passing — output capture + thread-scoped
 trace persistence.
+
+---
+
+## 2026-06-23 — Governance model: hardcoded `S-001..S-006` library removed
+
+**Type:** Architecture / Removal
+**Author:** Human + Claude
+
+The hardcoded issue-lifecycle compliance library was stripped and governance
+re-founded as a **user-authored workflow governance engine** (grilled 2026-06-23;
+captured in `docs/design/governance-engine.md`).
+
+- **Removed:** `rules/structural.py` (the `S-001..S-006` classes) and the
+  issue-lifecycle Pydantic doc classes / typed derivations. There is no
+  `structural.py` today and no `S-0xx` IDs remain in product code.
+- **Now:** governance = user-authored **artifact-spec predicates** (presence +
+  non-trivial checks) plus three **run-time governance rules** —
+  `G-001` (scope adherence), `G-002` (model compliance), `G-003` (skill
+  obligation) in `hephaestus/rules/governance.py` — run by the generic
+  `hephaestus/rules/registry.py` (no built-in rule set).
+- **Consequence for the role docs:** the `S-001` (issue-spec-before-work),
+  `S-002` (handoff), `S-003`/`S-004` (evidence/completion-log), and `S-005`
+  (`reviewed_by: architect` gate) behaviors survive as **process conventions**,
+  not code-enforced rules. The underlying OKF *paths* (issue / handoff / QA
+  evidence / log) are still code-enforced locations via `hephaestus/okf_layout.py`.
+
+Historical entries above that mention `S-001..S-006` describe the state at their
+own dates and are left intact as history. This entry records the removal so the
+log reflects the current governance model.

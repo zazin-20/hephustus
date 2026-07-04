@@ -1,7 +1,7 @@
 ---
 title: Worker
 role: worker
-updated: 2026-07-03
+updated: 2026-07-04
 owner: architect
 ---
 
@@ -27,7 +27,9 @@ implements it via TDD. It does not invent scope. The Worker runs on **Codex**
 ## Contract
 
 - One issue spec at a time. Definition of done = the issue's acceptance criteria.
-- On completion, leave a handoff at `../architect/handoffs/{issue_id}.md`
-  (**rule S-002**).
+- On completion, leave a handoff at `../architect/handoffs/{issue_id}.md` (the
+  path is the code-enforced location via `hephaestus/okf_layout.py`; leaving the
+  handoff is a process convention — the former rule `S-002` was removed
+  2026-06-23).
 
 See [../index.md](../index.md) for the full pipeline.

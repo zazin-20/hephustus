@@ -100,5 +100,5 @@ Traceability artifacts at each stage:
 ## Related Documents
 
 - [spec/architecture.md](../spec/architecture.md) — full system design
-- [spec/rules/structural.md](../spec/rules/structural.md) — built-in compliance rules
+- [structural.md](structural.md) — the governance model (user-authored artifact-spec predicates + the run-time governance G-rules; the hardcoded S-001..S-006 library was removed 2026-06-23)
 - [log.md](../log.md) — change history

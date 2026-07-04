@@ -196,9 +196,9 @@ thread, prepended with the role directive and injected OKF artifacts.
 - `eval_context.py` — `EvaluationContext { okf, trace, contract, actor, scope }`.
 - `index.py` — still builds the OKF slice (today's `OKFContext`), now a member of `EvaluationContext`.
 - `rules/base.py` — `HephaestusRule` widened: `check(ctx: EvaluationContext)`, declares `layer`, `trigger`, `scope`.
-- `rules/structural.py` — S-001..S-006 refactored to read `ctx.okf` (mechanical, behavior unchanged).
+- ~~`rules/structural.py` — S-001..S-006 refactored to read `ctx.okf`.~~ **Superseded:** the hardcoded `S-001..S-006` structural library was removed 2026-06-23; governance moved to user-authored artifact-spec predicates run by the generic `rules/registry.py`. There is no `structural.py` today. See `docs/design/governance-engine.md`.
 - `rules/exit.py` — exit rules as `HephaestusRule` subclasses (`layer="exit"`, `scope="issue"`).
-- `rules/governance.py` — scope/contract rules (`layer="governance"`, read `ctx.trace` + `ctx.contract`).
+- `rules/governance.py` — scope/contract/skill rules (`layer="governance"`, read `ctx.trace` + `ctx.contract`); the shipped set is `G-001`/`G-002`/`G-003`.
 - `rules/registry.py` — run rules selected by layer/trigger/scope.
 
 ### Knowledge layer (mostly unchanged)

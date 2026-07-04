@@ -1,14 +1,25 @@
 ---
 title: Hephaestus — System Architecture
-version: 0.2.1
+version: 0.2.2
 status: active
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-07-04
 owner: architect
 layer: spec
 ---
 
 # Hephaestus System Architecture
+
+> **Status — partly superseded.** This is the Phase-1 spec. The **canonical current
+> design** is [`docs/design/governance-engine.md`](docs/design/governance-engine.md), which
+> reframes Hephaestus as a *user-authored workflow governance engine*. Two things in this
+> doc are known to be superseded and pending re-recording as ADRs: (1) the hardcoded
+> `S-001..S-006` structural rule library was **removed 2026-06-23** — compliance now comes
+> from user-authored artifact-spec predicates plus a fixed set of run-time governance rules
+> (`G-001/G-002/G-003`), see §4 and [`structural.md`](structural.md); and (2) the
+> "detect-and-flag, not prevent / not the orchestrator" posture (§6.2) is superseded for the
+> workflow path by the gatekeeper-of-transitions model (governance-engine §3.1). The rest of
+> this doc (surfaces, integration layer, concurrency, tech stack) still holds.
 
 ## 1. Problem Statement
 
@@ -135,7 +146,8 @@ issue-003  API rate limiting        [PM ✓][Arch ⚠][Worker ○][QA ○][Log �
 The active rules engine. Runs checks against the `agents/` tree on demand
 or on file change events. Flags violations and routes them to the Correction Box.
 
-See `spec/rules/structural.md` for the full rule library.
+See [`structural.md`](structural.md) for the current rule model (user-authored artifact
+predicates + the run-time governance rules; the hardcoded `S-001..S-006` library is gone).
 
 **Two Compliance Loops:**
 
@@ -174,45 +186,47 @@ view code state alongside OKF state without switching windows.
 ## 4. Compliance Rule Architecture
 
 Rules are the core primitive of the compliance engine. All rules — built-in
-or custom — implement the same interface.
+governance rules or user-authored rules — implement the same interface
+(`hephaestus/rules/base.py`).
 
 ```python
-class HephaestusRule:
-    id: str                              # e.g. "structural.worker-needs-spec"
+class HephaestusRule(ABC):
+    id: str                              # e.g. "G-001"
     name: str                            # human-readable
-    layer: Literal["structural",         # filesystem checkable
-                   "behavioral"]         # LLM-judged (future)
-    severity: Literal["error",           # blocks progression
-                      "warning",         # flags for review
-                      "info"]            # informational
-    roles_involved: list[str]            # ["worker", "architect"]
-    auto_fixable: bool                   # can Hephaestus propose a fix?
-    fix_hint: str                        # what to tell the human
+    layer: str = "structural"            # e.g. "structural" | "governance"
+    trigger: str = "on_change"           # "on_change" (reads the tree) | "on_run" (reads the trace)
+    scope: str = "workspace"
+    severity: Severity = Severity.ERROR  # blocks / flags / informational
+    roles_involved: list[str] = []       # ["worker", "architect"]
+    auto_fixable: bool = False           # can Hephaestus propose a fix?
+    fix_hint: str = ""                   # what to tell the human
 
-    def check(self, context: OKFContext) -> ViolationResult:
+    def check(self, ctx: EvaluationContext) -> ViolationResult:
         ...
 ```
 
 **Rule Layers:**
 
-| Layer | Checks | Implementation | MVP? |
+| Layer | Checks | Implementation | State |
 |---|---|---|---|
-| Structural | File presence, frontmatter, cross-refs | Python + filesystem | ✅ |
-| Behavioral | Content quality, playbook adherence | LLM prompt | Future |
-| Custom | User-defined | Python fn / YAML | Future |
+| Governance | Scope, model, skill obligations at a run boundary | Python + trace/contract | ✅ (`G-001/G-002/G-003`) |
+| Artifact predicates | Required fields/sections of a produced artifact | Composed shipped predicates (no user code) | 🚧 governance-engine model |
+| Behavioral | Content quality, playbook adherence | LLM prompt | Deferred (opt-in) |
 
-**Built-in Structural Rules (MVP):**
+**There is no built-in *structural* rule set.** `hephaestus/rules/registry.py` is a generic
+runner — the caller passes the rules (user-authored artifact predicates, or the governance
+rules below). The former hardcoded `S-001..S-006` library was removed 2026-06-23.
 
-See `spec/rules/structural.md` for full definitions.
+**Built-in governance rules** (`hephaestus/rules/governance.py`, exported as
+`ALL_GOVERNANCE_RULES`; `layer: "governance"`, `trigger: "on_run"`):
 
-| Rule ID | Description |
-|---|---|
-| `S-001` | Worker must have Architect issue spec before starting |
-| `S-002` | Worker must leave handoff artifact after completing |
-| `S-003` | QA must produce evidence before issue logged as done |
-| `S-004` | Log entry must exist for every completed issue spec |
-| `S-005` | Handoff must have Architect review before QA starts |
-| `S-006` | Sprint state must be consistent (issues/index vs completion log) |
+| Rule ID | Class | Description |
+|---|---|---|
+| `G-001` | `G001ScopeAdherence` | Agent must not write outside the contract's `allowed_paths` |
+| `G-002` | `G002ModelCompliance` | Run's `actual_model` must match the contracted `model` |
+| `G-003` | `G003SkillObligation` | Enforced skills must emit a `skill_complete` marker in the trace |
+
+See [`structural.md`](structural.md) for full definitions and the removed-rule history.
 
 ---
 
@@ -370,7 +384,7 @@ Every watchdog event drives validation on the changed file(s):
 | Tier | Scope | Runs | Question answered |
 |---|---|---|---|
 | **Tier 1 — Schema** | single file | every write | Does it parse? Does its frontmatter have the required fields and valid enum values for its doc type? (Pydantic) |
-| **Tier 2 — Compliance** | cross-file | scoped to rules touching the changed file | Do the S-001…S-006 relationships still hold? |
+| **Tier 2 — Compliance** | cross-file / per-run | scoped to the rules the caller runs | Do the artifact-spec predicates and run-time governance rules (`G-001/G-002/G-003`) still hold? |
 
 Tier 1 is the core "are agents writing correctly" guard. The same validation logic
 is designed to be reusable by a future **pre-write validation API** that an agent
@@ -404,7 +418,9 @@ class Correction:
 ### Phase 1 — MVP (current scope)
 - OKF Editor (read/write `agents/` tree, frontmatter-aware)
 - Pipeline Dashboard (filesystem-derived state, no database)
-- 6 structural rules (S-001 through S-006)
+- Generic rule runner + run-time governance rules (`G-001/G-002/G-003`); user-authored
+  artifact-spec predicates per the governance-engine model (the hardcoded `S-001..S-006`
+  structural library was removed 2026-06-23)
 - Violation display with fix hints
 - Correction Box (capture + queue)
 - Code Viewer (read-only, multi-repo)
