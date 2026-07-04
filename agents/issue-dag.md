@@ -41,29 +41,28 @@ All of #1-#24 are closed on GitHub and merged to `main` (confirmed live,
 - #25 merged at `b5129d4` (`integration/wave5-025`), pushed to origin
   2026-07-04. GitHub issue #25 closed.
 
-## Current Open Sequence (ADR-0002 provider-identity finish work)
+## ADR-0002 provider-identity finish work — DONE
 
 ```text
-#26  resolve_provider() single seam  (unblocked)
+#26 DONE  resolve_provider() single seam
   |
-  -> #27  Remove the vestigial Tool enum  (blocked by #26)
+  -> #27 DONE  Remove the vestigial Tool enum
 ```
 
-Both issues derive from **ADR-0002**
+Both issues derived from **ADR-0002**
 (`docs/adr/0002-provider-identity-single-seam.md`), which formalized the
 pending "Provider registry" decision (governance-engine-revised.md §8, audit
-#1) after a `/improve-codebase-architecture` pass + Architect grill. A third
-finding (context-accumulation) was investigated and **dropped** — the
-clean-slate-per-run behavior it named already exists (thread keyed by
-workflow-run), and the only open part (long-thread compaction) is already
-owned by the deferred Headroom compression seam.
+#1) after a `/improve-codebase-architecture` pass + Architect grill. #26
+merged at `16bc96d`, #27 at `3b311c2`; both closed on GitHub 2026-07-04.
+ADR-0002 is fully landed — provider identity is one registry-owned seam, the
+closed `Tool` enum is gone, and a new provider is now genuinely one registered
+module (regression test proves `gemini_cli` is CLI-accepted with no routing
+edits).
 
-Dependency edges:
-
-| Issue | Blocked by |
-|---|---|
-| #26 resolve_provider() single seam | none — ready now |
-| #27 Remove Tool enum | #26 (both touch service.py provider-resolution) |
+A third architecture-pass finding (context-accumulation) was investigated and
+**dropped** — the clean-slate-per-run behavior it named already exists (thread
+keyed by workflow-run), and the only open part (long-thread compaction) is
+already owned by the deferred Headroom compression seam.
 
 ## Held for Human
 
@@ -83,8 +82,10 @@ Dependency edges:
 
 Checked `2026-07-04`:
 
-- `#1`-`#25` — all **closed**, all merged to `main` (see landing history above).
-- `#26` resolve_provider() single seam — **open**, `ready-for-agent`/`AFK`, unblocked.
-- `#27` Remove the vestigial Tool enum — **open**, `ready-for-agent`/`AFK`, blocked by #26.
+- `#1`-`#27` — all **closed**, all merged to `main`.
 
-Open wave: `#26` is dispatchable now; `#27` follows once #26 lands.
+No open, dispatchable work remains. The pipeline is idle until new issues are
+filed. Candidate follow-ups exist from the 2026-07-04 architecture pass
+(frontend Coordinator.jsx god-component, dead evaluate_spawn, unclosed DB
+connections, dual marker-parser, stale root architecture.md, the 4 other
+pending-ADR decisions from governance-engine-revised.md §8) — none filed yet.
