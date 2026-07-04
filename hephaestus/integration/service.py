@@ -12,6 +12,7 @@ from uuid import uuid4
 from hephaestus.contract import ExecutionContract
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.index import build_context
+from hephaestus.integration.contract_resolution import resolve as resolve_contract
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.providers import ProviderRegistry, provider_key, provider_registry
 from hephaestus.integration.routing import Tool
@@ -250,14 +251,15 @@ class AgentService:
             placement_id=placement_id,
             thread_id=thread.id,
         )
-        contract = self._contract(
-            node,
-            task,
-            tool,
-            context=thread.id,
+        contract = resolve_contract(
+            node=node,
+            task=task,
+            session_context=ctx,
+            context_id=thread.id,
             workflow_id=workflow_id,
             workflow_run_id=workflow_run_id,
             placement_id=placement_id,
+            registry=self.provider_registry,
         )
         run = create_run(
             self.state_db_path,
@@ -363,44 +365,6 @@ class AgentService:
             model=task.model,
             effort=task.effort,
             working_dir=str(task.cwd) if task.cwd else None,
-        )
-
-    def _contract(
-        self,
-        node: Node,
-        task: AgentTask,
-        tool: Tool | str,
-        *,
-        context: str,
-        workflow_id: str | None,
-        workflow_run_id: str,
-        placement_id: str | None,
-    ) -> ExecutionContract:
-        model = task.model or node.model
-        effort = task.effort or node.effort
-        if workflow_id and placement_id:
-            scope = f"workflow:{workflow_id}/placement:{placement_id}"
-        else:
-            scope = f"node:{node.node_id}"
-        provider = self.provider_registry.provider_for_model(model) or task.provider or node.provider
-        return ExecutionContract(
-            actor=node.node_id,
-            node_id=node.node_id,
-            provider=provider,
-            tags=node.tags,
-            context=context,
-            scope=scope,
-            model=model,
-            effort=effort,
-            tools=list(node.allowed_tools),
-            prompt=task.prompt,
-            tool=provider_key(tool),
-            issue_id=task.issue_id,
-            cwd=str(task.cwd) if task.cwd else node.working_dir,
-            workflow_id=workflow_id,
-            workflow_run_id=workflow_run_id,
-            placement_id=placement_id,
-            allowed_paths=list(node.allowed_paths),
         )
 
     def _evaluate_governance(self, prepared: PreparedRun, contract: ExecutionContract) -> None:

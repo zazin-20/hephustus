@@ -7,6 +7,7 @@ from hephaestus.integration.routing import (
     tool_for_provider,
 )
 from hephaestus.integration.context import SessionContext, build_session_context
+from hephaestus.integration.contract_resolution import resolve as resolve_execution_contract
 from hephaestus.integration.runners import (
     AgentEvent,
     AgentRunner,
@@ -22,6 +23,7 @@ __all__ = [
     "Tool", "tool_for_provider", "PROVIDER_TOOL", "TAG_DIRECTIVE",
     "ExecutionContract",
     "SessionContext", "build_session_context",
+    "resolve_execution_contract",
     "AgentTask", "AgentEvent", "AgentRunner",
     "EchoRunner", "ClaudeRunner", "CodexRunner", "build_codex_argv",
     "AgentService", "default_runners",
