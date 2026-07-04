@@ -58,6 +58,10 @@ class OKFLayout:
         return self.agents_root / "identities"
 
     @property
+    def workflows_dir(self) -> Path:
+        return self.agents_root / "workflows"
+
+    @property
     def archive_dir(self) -> Path:
         return self.agents_root / "archive"
 
@@ -72,6 +76,7 @@ class OKFLayout:
             self.qa_evidence_dir,
             self.log_dir,
             self.identities_dir,
+            self.workflows_dir,
             self.archive_dir,
         )
 
@@ -95,6 +100,9 @@ class OKFLayout:
 
     def identity_card_path(self, node_id: str) -> Path:
         return self.identities_dir / f"{node_id}.json"
+
+    def workflow_path(self, workflow_id: str, *, suffix: str = ".yaml") -> Path:
+        return self.workflows_dir / f"{workflow_id}{suffix}"
 
     def worker_tdd_path(self) -> Path:
         return self.worker_dir / "tdd.md"
