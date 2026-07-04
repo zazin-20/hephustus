@@ -18,13 +18,11 @@ issue specs, and reviews worker handoffs before QA.
 | Path | Holds |
 |---|---|
 | `architect.md` | The Architect directive (behavior contract) |
-| `architecture.md` | Full system design |
-| `architecture-coordinator.md` | Coordinator (node-graph workflow) architecture |
+| `architecture.md` | System architecture — control plane over AI providers |
 | `issue-dag.md` | Issue dependency graph + agent-ownership rules |
 | `issues/` | Per-issue specs + `index.md` rollup (`completed/` when closed) |
 | `handoffs/` | Worker handoff records (`completed/` when closed) |
 | `prds/` | Final PRD storage |
-| `rules/` | Governance model doc (`structural.md`, formerly the S-rule library) |
 | `briefs/` | Reusable briefs handed to downstream roles |
 | `discussion/` | Design discussion notes |
 | `plans/` | Implementation / sequencing plans |

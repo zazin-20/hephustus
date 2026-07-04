@@ -1,10 +1,10 @@
-# Hephaestus Coordinator — Architecture Foundation
+# Hephaestus — Architecture Foundation
 
 **Version:** 1.0
 **Date:** 2026-06-21
-**Status:** Decided (supersedes parts of `prd-coordinator.md`)
+**Status:** Decided — the architecture of record.
 
-This document captures the foundational architecture for the Coordinator phase, derived
+This document captures the foundational architecture for Hephaestus, derived
 from a design dialogue. It is deliberately **scale-first**: every decision was made
 against expected post-MVP requirements (multi-service workspaces, context curation,
 provider governance, full audit/replay, the future code-graph overlay).
@@ -228,7 +228,7 @@ durable → run marked `interrupted`; the user re-runs against the preserved cur
 
 ---
 
-## 7. What this supersedes in `prd-coordinator.md`
+## 7. What this supersedes (the earlier flat-file profile design)
 
 - Flat files in `agents/` for history/trace/corrections/profiles → **operational store** (§2, §4).
 - `history.py` / `tracer.py` / `corrections.py` as tree-writers → **store modules** (§5).
@@ -238,7 +238,7 @@ durable → run marked `interrupted`; the user re-runs against the preserved cur
 - Implicit single root → **explicit Workspace** = OKF root + N code roots (D2/D3).
 - Opaque Claude provider-resume as the context mechanism → **client-owned compiled context** (D5).
 
-The PRD's *user stories, UI surfaces (roster / conversation / spawn / toasts / correction box),
+The earlier design's *user stories, UI surfaces (roster / conversation / spawn / toasts / correction box),
 and out-of-scope list remain valid.* This document revises the *implementation foundation* beneath them.
 
 ---

@@ -39,9 +39,9 @@ handoffs before QA verifies them.
 6. **Rules** — governance is now user-authored: artifact-spec predicates plus
    the three run-time governance rules (`G-001`/`G-002`/`G-003` in
    `hephaestus/rules/governance.py`, run by the generic
-   `hephaestus/rules/registry.py`). See `../../structural.md` (now the
-   governance-model doc) and `docs/design/governance-engine.md`. The former
-   hardcoded `S-001..S-006` structural library was removed 2026-06-23.
+   `hephaestus/rules/registry.py`). See `docs/design/governance-engine.md` for
+   the governance model. The former hardcoded `S-001..S-006` structural library
+   was removed 2026-06-23.
 
 ## Invariants to protect
 
@@ -58,8 +58,6 @@ handoffs before QA verifies them.
 ## References
 
 - [architecture.md](architecture.md), [issue-dag.md](issue-dag.md)
-- [structural.md](../../structural.md) — the governance model (formerly
-  the `S-001…S-006` library, removed 2026-06-23)
 - [../../docs/design/governance-engine.md](../../docs/design/governance-engine.md)
-  — canonical governance model
+  — canonical governance model (the former `S-001…S-006` library was removed 2026-06-23)
 - Layout seam: `hephaestus/okf_layout.py`

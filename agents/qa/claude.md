@@ -35,6 +35,5 @@ its issue spec, and you produce the evidence that lets it be logged as done.
 ## References
 
 - Evidence path + governance model: [index.md](index.md),
-  [structural.md](../../structural.md) (the
-  governance-model doc, formerly the S-rule library)
+  [governance-engine.md](../../docs/design/governance-engine.md) (the governance model)
 - Pipeline: [../index.md](../index.md)
