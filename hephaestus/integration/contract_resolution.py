@@ -57,4 +57,5 @@ def resolve(
         workflow_run_id=resolved_workflow_run_id,
         placement_id=resolved_placement_id,
         allowed_paths=list(node.allowed_paths),
+        skill_obligations=list(node.skill_obligations),
     )

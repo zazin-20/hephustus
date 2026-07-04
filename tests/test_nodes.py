@@ -33,6 +33,7 @@ def test_create_node_returns_node_with_governance_fields(tmp_path):
         inputs=["artifact:prd"],
         outputs=["artifact:adr"],
         skills=["skill:grill-me"],
+        skill_obligations=["skill:grill-me"],
         allowed_paths=["agents/architect"],
         allowed_tools=["read_file", "write_file"],
         context_policy="inputs-only",
@@ -46,6 +47,7 @@ def test_create_node_returns_node_with_governance_fields(tmp_path):
     assert node.inputs == ["artifact:prd"]
     assert node.outputs == ["artifact:adr"]
     assert node.skills == ["skill:grill-me"]
+    assert node.skill_obligations == ["skill:grill-me"]
     assert node.allowed_paths == ["agents/architect"]
     assert node.allowed_tools == ["read_file", "write_file"]
     assert node.context_policy == "inputs-only"
@@ -157,6 +159,7 @@ def test_optional_fields_default_to_none_or_empty(tmp_path):
     assert node.inputs == []
     assert node.outputs == []
     assert node.skills == []
+    assert node.skill_obligations == []
     assert node.allowed_paths == []
     assert node.allowed_tools == []
     assert node.context_policy is None

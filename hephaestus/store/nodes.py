@@ -24,6 +24,7 @@ class Node:
     inputs: list[str]
     outputs: list[str]
     skills: list[str]
+    skill_obligations: list[str]
     allowed_paths: list[str]
     allowed_tools: list[str]
     context_policy: str | None
@@ -44,6 +45,7 @@ def create_node(
     inputs: list[str] | None = None,
     outputs: list[str] | None = None,
     skills: list[str] | None = None,
+    skill_obligations: list[str] | None = None,
     allowed_paths: list[str] | None = None,
     allowed_tools: list[str] | None = None,
     context_policy: str | None = None,
@@ -55,9 +57,10 @@ def create_node(
             """
             INSERT INTO nodes(
                 node_id, name, provider, tags, rules, model, effort, working_dir,
-                inputs, outputs, skills, allowed_paths, allowed_tools, context_policy, created_at
+                inputs, outputs, skills, skill_obligations, allowed_paths, allowed_tools,
+                context_policy, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 node_id,
@@ -71,6 +74,7 @@ def create_node(
                 dumps_json(inputs or []),
                 dumps_json(outputs or []),
                 dumps_json(skills or []),
+                dumps_json(skill_obligations or []),
                 dumps_json(allowed_paths or []),
                 dumps_json(allowed_tools or []),
                 context_policy,
@@ -91,6 +95,7 @@ def create_node(
         inputs=list(inputs or []),
         outputs=list(outputs or []),
         skills=list(skills or []),
+        skill_obligations=list(skill_obligations or []),
         allowed_paths=list(allowed_paths or []),
         allowed_tools=list(allowed_tools or []),
         context_policy=context_policy,
@@ -116,7 +121,8 @@ def list_nodes(db_path: Path) -> list[Node]:
             """
             SELECT
                 node_id, name, provider, tags, rules, model, effort, working_dir,
-                inputs, outputs, skills, allowed_paths, allowed_tools, context_policy, created_at
+                inputs, outputs, skills, skill_obligations, allowed_paths, allowed_tools,
+                context_policy, created_at
             FROM nodes
             ORDER BY created_at ASC, node_id ASC
             """
@@ -130,7 +136,8 @@ def get_node(db_path: Path, node_id: str) -> Node:
             """
             SELECT
                 node_id, name, provider, tags, rules, model, effort, working_dir,
-                inputs, outputs, skills, allowed_paths, allowed_tools, context_policy, created_at
+                inputs, outputs, skills, skill_obligations, allowed_paths, allowed_tools,
+                context_policy, created_at
             FROM nodes
             WHERE node_id = ?
             """,
@@ -197,10 +204,11 @@ def _row_to_node(row) -> Node:
         inputs=loads_json(row[8]),
         outputs=loads_json(row[9]),
         skills=loads_json(row[10]),
-        allowed_paths=loads_json(row[11]),
-        allowed_tools=loads_json(row[12]),
-        context_policy=row[13],
-        created_at=row[14],
+        skill_obligations=loads_json(row[11]),
+        allowed_paths=loads_json(row[12]),
+        allowed_tools=loads_json(row[13]),
+        context_policy=row[14],
+        created_at=row[15],
     )
 
 

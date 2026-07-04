@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from hephaestus.core import Severity, Violation, ViolationResult
+from hephaestus.handoff import has_skill_completion
+from hephaestus.okf_layout import OKFLayout
 from hephaestus.rules.base import HephaestusRule
+from hephaestus.skills import resolve_skill_ref
 
 _WRITE_ACTIONS = frozenset({"write_file", "bash"})
 
@@ -71,7 +74,46 @@ class G002ModelCompliance(HephaestusRule):
         ])
 
 
+class G003SkillObligation(HephaestusRule):
+    id = "G-003"
+    name = "Enforced skill obligations must emit completion markers"
+    layer = "governance"
+    trigger = "on_run"
+    scope = "issue"
+    severity = Severity.ERROR
+    roles_involved = []
+    fix_hint = (
+        "Emit a @@HEPHAESTUS@@ skill_complete marker with ok=true for each enforced skill."
+    )
+
+    def check(self, ctx) -> ViolationResult:
+        obligations = ctx.contract.get("skill_obligations", [])
+        if not obligations:
+            return ViolationResult.of([])
+
+        layout = OKFLayout.for_existing_root(ctx.okf.root)
+        violations = []
+        for ref in obligations:
+            skill_id = resolve_skill_ref(layout, ref).skill_id
+            if has_skill_completion(skill_id, turns=ctx.turns, trace=ctx.trace):
+                continue
+            violations.append(
+                Violation(
+                    rule_id=self.id,
+                    severity=self.severity,
+                    message=(
+                        f"Agent {ctx.actor} did not emit the required skill completion "
+                        f"marker for {skill_id!r}"
+                    ),
+                    artifact=skill_id,
+                    fix_hint=self.fix_hint,
+                )
+            )
+        return ViolationResult.of(violations)
+
+
 ALL_GOVERNANCE_RULES: list[HephaestusRule] = [
     G001ScopeAdherence(),
     G002ModelCompliance(),
+    G003SkillObligation(),
 ]

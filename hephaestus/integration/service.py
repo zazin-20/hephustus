@@ -10,6 +10,7 @@ from typing import AsyncIterator
 from uuid import uuid4
 
 from hephaestus.contract import ExecutionContract
+from hephaestus.core import Severity, Violation
 from hephaestus.eval_context import EvaluationContext
 from hephaestus.index import build_context
 from hephaestus.integration.contract_resolution import resolve as resolve_contract
@@ -30,7 +31,7 @@ from hephaestus.rules.registry import run_layer
 from hephaestus.store.db import connect
 from hephaestus.store.nodes import Node, create_node, get_node
 from hephaestus.store.runs import create_run, finish_run, interrupt_running_runs
-from hephaestus.store.threads import append_turn, get_or_create_thread
+from hephaestus.store.threads import append_turn, get_or_create_thread, list_turns
 from hephaestus.store.trace import append_trace_event, list_trace_events
 from hephaestus.store.violations import append_violation
 
@@ -44,6 +45,17 @@ class PreparedRun:
     run_id: str
     tool: Tool | str
     ctx: SessionContext
+
+
+class GovernanceViolationError(RuntimeError):
+    def __init__(self, violations: list[Violation]):
+        self.violations = list(violations)
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        if not self.violations:
+            return "Governance violation"
+        return "; ".join(f"{v.rule_id}: {v.message}" for v in self.violations)
 
 
 def _display_tool(provider: str) -> Tool | str:
@@ -90,6 +102,7 @@ class AgentService:
             node_id=node.node_id,
             tags=node.tags,
             issue_id=task.issue_id,
+            skills=node.skills,
             inputs=node.inputs,
             outputs=node.outputs,
             db_path=self.state_db_path,
@@ -338,14 +351,17 @@ class AgentService:
                 raise
             else:
                 final_contract = contract.with_updates(actual_model=actual_model or contract.model)
+                violations = self._evaluate_governance(prepared, final_contract)
+                error_violations = [v for v in violations if v.severity == Severity.ERROR]
                 finish_run(
                     self.state_db_path,
                     prepared.run_id,
-                    status="done",
+                    status="error" if error_violations else "done",
                     usage=usage,
                     contract=final_contract.as_dict(),
                 )
-                self._evaluate_governance(prepared, final_contract)
+                if error_violations:
+                    raise GovernanceViolationError(error_violations)
 
     def _resolve_node(self, task: AgentTask) -> Node:
         if task.node_id:
@@ -367,27 +383,29 @@ class AgentService:
             working_dir=str(task.cwd) if task.cwd else None,
         )
 
-    def _evaluate_governance(self, prepared: PreparedRun, contract: ExecutionContract) -> None:
+    def _evaluate_governance(self, prepared: PreparedRun, contract: ExecutionContract) -> list[Violation]:
         trace = list_trace_events(self.state_db_path, run_id=prepared.run_id)
+        turns = [turn for turn in list_turns(self.state_db_path, prepared.thread_id) if turn.run_id == prepared.run_id]
         ctx = EvaluationContext(
             okf=build_context(self.root),
+            turns=turns,
             trace=trace,
             contract=contract.as_dict(),
             actor=prepared.node_id,
             scope=contract.scope,
         )
         violations = run_layer(ALL_GOVERNANCE_RULES, ctx, layer="governance")
-        if not violations:
-            return
-        with connect(self.state_db_path) as db:
-            for violation in violations:
-                append_violation(
-                    db,
-                    violation,
-                    run_id=prepared.run_id,
-                    node_id=prepared.node_id,
-                    issue_id=contract.issue_id,
-                )
+        if violations:
+            with connect(self.state_db_path) as db:
+                for violation in violations:
+                    append_violation(
+                        db,
+                        violation,
+                        run_id=prepared.run_id,
+                        node_id=prepared.node_id,
+                        issue_id=contract.issue_id,
+                    )
+        return violations
 
 
 def main(argv: list[str] | None = None) -> int:

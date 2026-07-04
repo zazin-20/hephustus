@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hephaestus.integration.routing import TAG_DIRECTIVE
+from hephaestus.skills import resolve_skill_refs
 from hephaestus.integration.turns import describe_turn
 from hephaestus.okf_layout import OKFLayout
 from hephaestus.store.frozen_rules import ScopeAddress, list_frozen_rules_for_address
@@ -36,9 +37,10 @@ def _candidate_paths(
     layout: OKFLayout,
     tags: list[str],
     issue_id: str | None,
+    skills: list[str],
     inputs: list[str],
     outputs: list[str],
-) -> tuple[list[Path], list[Path], list[Path]]:
+) -> tuple[list[Path], list[Path], list[Path], list[Path]]:
     constitution_paths: list[Path] = []
     for tag in tags:
         relative = TAG_DIRECTIVE.get(tag)
@@ -47,12 +49,13 @@ def _candidate_paths(
     if "worker" in tags:
         constitution_paths.append(layout.worker_tdd_path())
 
+    skill_paths = [skill.path for skill in resolve_skill_refs(layout, skills)]
     input_paths = [_resolve_declared_path(layout, declared) for declared in inputs]
     if issue_id and _ISSUE_CONSUMER_TAGS.intersection(tags):
         input_paths.append(layout.issue_path(issue_id))
 
     spec_paths = [_resolve_declared_path(layout, declared) for declared in outputs]
-    return constitution_paths, input_paths, spec_paths
+    return constitution_paths, skill_paths, input_paths, spec_paths
 
 
 def _render_file_contents(root: Path, files: list[Path]) -> list[str]:
@@ -106,6 +109,10 @@ def _render_constitution(
     return "\n\n".join(["# Constitution", *parts])
 
 
+def _render_skills(root: Path, files: list[Path]) -> str:
+    return _render_section(root, "Skills", files)
+
+
 def _render_replay(db_path: str | Path | None, thread_id: str | None) -> str:
     if db_path is None or thread_id is None:
         return ""
@@ -131,6 +138,7 @@ def build_session_context(
     node_id: str,
     tags: list[str],
     issue_id: str | None = None,
+    skills: list[str] | None = None,
     inputs: list[str] | None = None,
     outputs: list[str] | None = None,
     db_path: str | Path | None = None,
@@ -143,18 +151,20 @@ def build_session_context(
     render_root = Path(root)
     layout = OKFLayout.for_existing_root(render_root)
 
-    constitution_candidates, input_candidates, spec_candidates = _candidate_paths(
+    constitution_candidates, skill_candidates, input_candidates, spec_candidates = _candidate_paths(
         layout,
         tags,
         issue_id,
+        list(skills or []),
         list(inputs or []),
         list(outputs or []),
     )
-    candidates = constitution_candidates + input_candidates + spec_candidates
+    candidates = constitution_candidates + skill_candidates + input_candidates + spec_candidates
     files = [p for p in candidates if p.is_file()]
     missing = [p for p in candidates if not p.is_file()]
 
     constitution_files = [p for p in constitution_candidates if p.is_file()]
+    skill_files = [p for p in skill_candidates if p.is_file()]
     input_files = [p for p in input_candidates if p.is_file()]
     spec_files = [p for p in spec_candidates if p.is_file()]
 
@@ -170,6 +180,7 @@ def build_session_context(
             node_id=node_id,
             tags=tags,
         ),
+        _render_skills(render_root, skill_files),
         _render_section(render_root, "Input artifacts", input_files),
         _render_section(render_root, "Artifact specs", spec_files),
         _render_replay(db_path, thread_id),

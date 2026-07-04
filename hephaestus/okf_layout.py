@@ -66,6 +66,10 @@ class OKFLayout:
         return self.agents_root / "archive"
 
     @property
+    def skills_dir(self) -> Path:
+        return self.agents_root / "skills"
+
+    @property
     def worker_dir(self) -> Path:
         return self.agents_root / "worker"
 
@@ -78,6 +82,7 @@ class OKFLayout:
             self.identities_dir,
             self.workflows_dir,
             self.archive_dir,
+            self.skills_dir,
         )
 
     def resolve(self, relative: str | Path) -> Path:
@@ -103,6 +108,9 @@ class OKFLayout:
 
     def workflow_path(self, workflow_id: str, *, suffix: str = ".yaml") -> Path:
         return self.workflows_dir / f"{workflow_id}{suffix}"
+
+    def skill_path(self, skill_id: str) -> Path:
+        return self.skills_dir / f"{skill_id}.md"
 
     def worker_tdd_path(self) -> Path:
         return self.worker_dir / "tdd.md"
