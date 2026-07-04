@@ -14,6 +14,7 @@ def test_layout_for_workspace_builds_canonical_paths(tmp_path):
     assert layout.qa_evidence_path("issue-010") == tmp_path / "agents" / "qa" / "evidence" / "issue-010.md"
     assert layout.log_entry_path("issue-010") == tmp_path / "agents" / "log" / "issue-010.md"
     assert layout.identity_card_path("work-001") == tmp_path / "agents" / "identities" / "work-001.json"
+    assert layout.workflow_path("issue-020") == tmp_path / "agents" / "workflows" / "issue-020.yaml"
     assert layout.worker_tdd_path() == tmp_path / "agents" / "worker" / "tdd.md"
 
 
