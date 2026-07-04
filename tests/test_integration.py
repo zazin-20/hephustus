@@ -24,6 +24,7 @@ from hephaestus.integration.runners import (
 )
 from hephaestus.integration.service import AgentService, PreparedRun
 from hephaestus.store.db import connect
+from hephaestus.store.frozen_rules import upsert_frozen_rule
 from hephaestus.store.nodes import create_node
 from hephaestus.store.runs import get_run
 from hephaestus.store.threads import list_turns
@@ -578,3 +579,137 @@ def test_second_run_starts_with_clean_context(tmp_path):
     assert len(captured_prompts) == 2
     assert "Prior context" not in captured_prompts[0]
     assert "Prior context" not in captured_prompts[1]
+
+
+def test_node_context_is_clean_slate_with_layered_directives_and_same_node_replay(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "worker").mkdir(parents=True)
+    (agents / "worker" / "claude.md").write_text("WORKER DIRECTIVE", encoding="utf-8")
+    (agents / "worker" / "tdd.md").write_text("TDD PLAYBOOK", encoding="utf-8")
+    (agents / "artifacts").mkdir(parents=True)
+    (agents / "artifacts" / "issue-019.md").write_text("ISSUE ARTIFACT", encoding="utf-8")
+    (agents / "specs").mkdir(parents=True)
+    (agents / "specs" / "handoff.md").write_text("HANDOFF SPEC", encoding="utf-8")
+
+    captured: list[tuple[str, str]] = []
+
+    class CapturingRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            captured.append((contract.node_id, ctx.system_prompt))
+            yield AgentEvent("text", f"assistant: {contract.prompt}")
+            yield AgentEvent("result", "done")
+
+    async def go():
+        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        worker = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="Worker",
+            provider="codex",
+            tags=["worker"],
+            rules=[],
+            inputs=["artifacts/issue-019.md"],
+            outputs=["specs/handoff.md"],
+        )
+        qa = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="QA",
+            provider="codex",
+            tags=["qa"],
+            rules=[],
+            inputs=["artifacts/issue-019.md"],
+            outputs=["specs/handoff.md"],
+        )
+        machine = str(tmp_path.resolve())
+        upsert_frozen_rule(service.state_db_path, scope="global", topic_key="tone", body="GLOBAL DIRECTIVE")
+        upsert_frozen_rule(
+            service.state_db_path,
+            scope="machine",
+            topic_key="python",
+            body="MACHINE DIRECTIVE",
+            machine=machine,
+        )
+        upsert_frozen_rule(
+            service.state_db_path,
+            scope="workflow",
+            topic_key="artifact",
+            body="WORKFLOW DIRECTIVE",
+            workflow_id="wf-019",
+        )
+        upsert_frozen_rule(
+            service.state_db_path,
+            scope="tag",
+            topic_key="worker",
+            body="TAG DIRECTIVE",
+            tag="worker",
+        )
+        upsert_frozen_rule(
+            service.state_db_path,
+            scope="node",
+            topic_key="handoff",
+            body="NODE DIRECTIVE",
+            workflow_id="wf-019",
+            placement_id="implement",
+            node_id=worker.node_id,
+        )
+
+        async for _ in service.run(
+            service.task_for_node(
+                node_id=worker.node_id,
+                prompt="implement step one",
+                workflow_id="wf-019",
+                workflow_run_id="run-019",
+                placement_id="implement",
+            )
+        ):
+            pass
+        async for _ in service.run(
+            service.task_for_node(
+                node_id=worker.node_id,
+                prompt="implement step two",
+                workflow_id="wf-019",
+                workflow_run_id="run-019",
+                placement_id="implement",
+            )
+        ):
+            pass
+        async for _ in service.run(
+            service.task_for_node(
+                node_id=qa.node_id,
+                prompt="verify output",
+                workflow_id="wf-019",
+                workflow_run_id="run-019",
+                placement_id="review",
+            )
+        ):
+            pass
+
+    asyncio.run(go())
+
+    first = captured[0][1]
+    second = captured[1][1]
+    third = captured[2][1]
+
+    for expected in (
+        "GLOBAL DIRECTIVE",
+        "MACHINE DIRECTIVE",
+        "WORKFLOW DIRECTIVE",
+        "WORKER DIRECTIVE",
+        "TAG DIRECTIVE",
+        "NODE DIRECTIVE",
+        "TDD PLAYBOOK",
+        "ISSUE ARTIFACT",
+        "HANDOFF SPEC",
+    ):
+        assert expected in first
+
+    assert "Prior context" not in first
+    assert "Prior context" in second
+    assert "user: implement step one" in second
+    assert "assistant: assistant: implement step one" in second
+    assert "implement step one" not in third
+    assert "assistant: assistant: implement step one" not in third
