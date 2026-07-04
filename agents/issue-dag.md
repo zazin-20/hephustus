@@ -38,29 +38,38 @@ All of #1-#24 are closed on GitHub and merged to `main` (confirmed live,
 - #21-22 merged at `1cc47ad` (`integration/wave3-021-022`).
 - #23-24 merged at `602a015` (`integration/wave4-023-024`), pushed to origin
   2026-07-04.
+- #25 merged at `b5129d4` (`integration/wave5-025`), pushed to origin
+  2026-07-04. GitHub issue #25 closed.
 
-## Current Open Sequence
+## Current Open Sequence (ADR-0002 provider-identity finish work)
 
 ```text
-#20 DONE, #23 DONE
+#26  resolve_provider() single seam  (unblocked)
   |
-  -> #25  Node-graph editor + live monitor  [HELD — see below]
+  -> #27  Remove the vestigial Tool enum  (blocked by #26)
 ```
 
-Only one issue remains open: `#25`, blocked-by `#20` (done) and `#23` (done)
-— technically unblocked, but held regardless (see below). No other open
-issues exist as of the live GitHub snapshot below.
+Both issues derive from **ADR-0002**
+(`docs/adr/0002-provider-identity-single-seam.md`), which formalized the
+pending "Provider registry" decision (governance-engine-revised.md §8, audit
+#1) after a `/improve-codebase-architecture` pass + Architect grill. A third
+finding (context-accumulation) was investigated and **dropped** — the
+clean-slate-per-run behavior it named already exists (thread keyed by
+workflow-run), and the only open part (long-thread compaction) is already
+owned by the deferred Headroom compression seam.
+
+Dependency edges:
+
+| Issue | Blocked by |
+|---|---|
+| #26 resolve_provider() single seam | none — ready now |
+| #27 Remove Tool enum | #26 (both touch service.py provider-resolution) |
 
 ## Held for Human
 
-- `#25` (node-graph editor + live monitor) carries no `ready-for-agent`/`AFK`
-  label — frontend-heavy, held for human review by default. Do not
-  auto-dispatch without explicit human go-ahead, even though its
-  dependencies (`#20`, `#23`) are done.
-- **2026-07-04: human explicitly authorized dispatch of #25** (Architect
-  review + Worker implementation). This is a one-time authorization for this
-  issue, not a standing change to the hold policy — future frontend-heavy
-  issues should still default to held-for-human unless similarly confirmed.
+- None currently. (`#25` was held-for-human by default but human-authorized
+  and landed 2026-07-04. #26/#27 are `ready-for-agent`/`AFK` — mechanical
+  refactors with no open design questions, resolved by ADR-0002.)
 
 ## Agent Ownership Rule
 
@@ -74,9 +83,8 @@ issues exist as of the live GitHub snapshot below.
 
 Checked `2026-07-04`:
 
-- `#1`-`#24` — all **closed**, all merged to `main` (see landing history above).
-- `#25` Node-graph editor + live monitor — **open**, held for human (no
-  `ready-for-agent`/`AFK` label).
+- `#1`-`#25` — all **closed**, all merged to `main` (see landing history above).
+- `#26` resolve_provider() single seam — **open**, `ready-for-agent`/`AFK`, unblocked.
+- `#27` Remove the vestigial Tool enum — **open**, `ready-for-agent`/`AFK`, blocked by #26.
 
-No open, dispatchable work remains. The pipeline is idle until `#25` is
-picked up by a human, or new issues are filed.
+Open wave: `#26` is dispatchable now; `#27` follows once #26 lands.
