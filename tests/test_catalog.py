@@ -7,13 +7,12 @@ import json
 import hephaestus.catalog as catalog_mod
 import hephaestus.integration.providers as providers_mod
 from hephaestus.catalog import catalog, discover_claude, discover_codex
-from hephaestus.integration.routing import Tool
 
 
 def test_catalog_groups_models_by_provider():
     providers = {g["provider"] for g in catalog()["providers"]}
-    assert Tool.CLAUDE.value in providers
-    assert Tool.CODEX.value in providers
+    assert "claude" in providers
+    assert "codex" in providers
 
 
 def test_every_model_carries_its_own_efforts():
@@ -73,5 +72,5 @@ def test_codex_falls_back_when_cache_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog_mod, "_CODEX_CACHE", tmp_path / "nope.json")
     monkeypatch.setattr(providers_mod, "_CODEX_CACHE", tmp_path / "nope.json")
     codex = discover_codex()
-    assert codex["provider"] == Tool.CODEX.value
+    assert codex["provider"] == "codex"
     assert codex["models"]  # non-empty fallback

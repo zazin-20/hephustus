@@ -7,7 +7,6 @@ from hephaestus.integration.context import build_session_context
 from hephaestus.integration.contract_resolution import resolve
 from hephaestus.integration.providers import provider_registry
 from hephaestus.integration.runners import AgentTask, EchoRunner
-from hephaestus.integration.routing import Tool
 from hephaestus.integration.service import AgentService
 from hephaestus.store.nodes import create_node
 
@@ -88,7 +87,7 @@ def test_resolve_derives_execution_contract_from_node_and_context(tmp_path):
 
 def test_service_begin_uses_public_contract_resolution(tmp_path):
     _write_context_files(tmp_path)
-    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
     service = AgentService(tmp_path, runners=runners)
     node = create_node(
         service.state_db_path,

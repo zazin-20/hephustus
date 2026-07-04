@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 from hephaestus.integration.runners import AgentEvent
-from hephaestus.integration.routing import Tool
 from hephaestus.integration.service import AgentService
 from hephaestus.store.nodes import create_node
 from hephaestus.store.runs import get_run
@@ -46,7 +45,7 @@ def test_workflow_runtime_advances_two_node_workflow_on_green(tmp_path):
     )
     service = AgentService(
         tmp_path,
-        runners={Tool.CLAUDE: runner, Tool.CODEX: runner},
+        runners={"claude": runner, "codex": runner},
     )
     draft = create_node(
         service.state_db_path,
@@ -116,7 +115,7 @@ def test_workflow_runtime_blocks_on_failing_exit_gate(tmp_path):
             )
         },
     )
-    service = AgentService(tmp_path, runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+    service = AgentService(tmp_path, runners={"claude": runner, "codex": runner})
     workflow = _workflow_fixture(tmp_path, service, advance=AdvanceMode.ALLOW)
 
     result = asyncio.run(
@@ -151,7 +150,7 @@ def test_workflow_runtime_ask_before_advancing_on_green_gate(tmp_path):
             )
         },
     )
-    service = AgentService(tmp_path, runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+    service = AgentService(tmp_path, runners={"claude": runner, "codex": runner})
     workflow = _workflow_fixture(tmp_path, service, advance=AdvanceMode.ASK)
 
     result = asyncio.run(
@@ -172,7 +171,7 @@ def test_workflow_runtime_ask_before_advancing_on_green_gate(tmp_path):
 def test_workflow_runtime_pauses_hitl_nodes_until_human_input(tmp_path):
     _write_context_files(tmp_path)
     runner = _WritingRunner(tmp_path)
-    service = AgentService(tmp_path, runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+    service = AgentService(tmp_path, runners={"claude": runner, "codex": runner})
     workflow = _workflow_fixture(
         tmp_path,
         service,
@@ -209,7 +208,7 @@ def test_workflow_runtime_emits_live_state_updates(tmp_path):
             )
         },
     )
-    service = AgentService(tmp_path, runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+    service = AgentService(tmp_path, runners={"claude": runner, "codex": runner})
     workflow = _workflow_fixture(tmp_path, service, advance=AdvanceMode.ASK)
     updates = []
 

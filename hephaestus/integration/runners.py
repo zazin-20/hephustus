@@ -21,7 +21,6 @@ from typing import Any, AsyncIterator, Callable, Protocol, runtime_checkable
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.adapters import codex_flags
 from hephaestus.integration.context import SessionContext
-from hephaestus.integration.routing import Tool
 from hephaestus.integration.turns import turn_payload
 
 try:
@@ -78,7 +77,7 @@ class AgentEvent:
 
 @runtime_checkable
 class AgentRunner(Protocol):
-    tool: Tool | str
+    tool: str
 
     def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
         ...
@@ -87,14 +86,13 @@ class AgentRunner(Protocol):
 class EchoRunner:
     """Deterministic runner that reports what *would* be sent. No external calls."""
 
-    def __init__(self, tool: Tool | str = Tool.CLAUDE):
+    def __init__(self, tool: str = "claude"):
         self.tool = tool
 
     async def run(self, contract: ExecutionContract, ctx: SessionContext) -> AsyncIterator[AgentEvent]:
-        tool = getattr(self.tool, "value", self.tool)
         yield AgentEvent(
             "system",
-            f"[echo:{tool}] node={contract.node_id} tags={','.join(contract.tags)} issue={contract.issue_id}",
+            f"[echo:{self.tool}] node={contract.node_id} tags={','.join(contract.tags)} issue={contract.issue_id}",
         )
         if contract.model or contract.effort:
             yield AgentEvent("system", f"model={contract.model} effort={contract.effort}")
@@ -136,7 +134,7 @@ def _build_claude_options(
 
 
 class ClaudeRunner:
-    tool = Tool.CLAUDE
+    tool = "claude"
 
     def __init__(
         self,
@@ -229,7 +227,7 @@ def _decode_jsonl_line(
 
 
 class CodexRunner:
-    tool = Tool.CODEX
+    tool = "codex"
 
     def __init__(
         self,

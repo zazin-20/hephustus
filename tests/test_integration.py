@@ -12,8 +12,8 @@ from hephaestus.integration.providers import (
     _claude_flags,
     _claude_normalize_event,
     _codex_normalize_event,
+    provider_key,
 )
-from hephaestus.integration.routing import Tool, tool_for_provider
 from hephaestus.integration.runners import (
     AgentEvent,
     AgentTask,
@@ -65,10 +65,9 @@ def _task(
         **kwargs,
     )
 
-
-def test_routing_uses_provider():
-    assert tool_for_provider("codex") is Tool.CODEX
-    assert tool_for_provider("claude") is Tool.CLAUDE
+def test_provider_keys_are_plain_strings():
+    assert provider_key("codex") == "codex"
+    assert provider_key("claude") == "claude"
 
 
 def test_context_injects_directive_issue_and_tdd(tmp_path):
@@ -170,23 +169,23 @@ def test_build_codex_argv_omits_effort_when_unset():
 
 def test_resolve_routes_by_model_provider(tmp_path):
     """The chosen model decides the runner, overriding the node's provider."""
-    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
     service = AgentService(tmp_path, runners=runners)
 
     tool, _ = service.resolve(_task(provider="claude", tags=["architect"], prompt="x", model="gpt-5.4"))
-    assert tool == Tool.CODEX
+    assert tool == "codex"
     tool2, _ = service.resolve(_task(provider="codex", tags=["worker"], prompt="x", model="opus"))
-    assert tool2 == Tool.CLAUDE
-    assert service.resolve(_task(provider="claude", tags=["architect"], prompt="x"))[0] == Tool.CLAUDE
-    assert service.resolve(_task(provider="codex", tags=["worker"], prompt="x"))[0] == Tool.CODEX
+    assert tool2 == "claude"
+    assert service.resolve(_task(provider="claude", tags=["architect"], prompt="x"))[0] == "claude"
+    assert service.resolve(_task(provider="codex", tags=["worker"], prompt="x"))[0] == "codex"
 
 
 def test_provider_for_model_classifies():
     from hephaestus.catalog import provider_for_model
 
-    assert provider_for_model("opus") == Tool.CLAUDE.value
-    assert provider_for_model("claude-opus-4-8") == Tool.CLAUDE.value
-    assert provider_for_model("gpt-5.4") == Tool.CODEX.value
+    assert provider_for_model("opus") == "claude"
+    assert provider_for_model("claude-opus-4-8") == "claude"
+    assert provider_for_model("gpt-5.4") == "codex"
     assert provider_for_model(None) is None
     assert provider_for_model("some-unknown-model") is None
 
@@ -217,7 +216,7 @@ def test_service_skips_empty_lifecycle_turns(tmp_path):
     from hephaestus.store.threads import list_turns
 
     class _LifecycleRunner:
-        tool = Tool.CLAUDE
+        tool = "claude"
 
         async def run(self, contract, ctx):
             yield AgentEvent("system", "")       # lifecycle noise -> dropped
@@ -226,7 +225,7 @@ def test_service_skips_empty_lifecycle_turns(tmp_path):
             yield AgentEvent("text", "the answer")
 
     async def go():
-        runners = {Tool.CLAUDE: _LifecycleRunner(), Tool.CODEX: _LifecycleRunner()}
+        runners = {"claude": _LifecycleRunner(), "codex": _LifecycleRunner()}
         service = AgentService(tmp_path, runners=runners)
         prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="hi", issue_id="issue-001"))
         async for _ in service.run(prepared):
@@ -305,7 +304,7 @@ def test_trace_persists_and_queryable_by_thread(tmp_path):
     from hephaestus.store.trace import list_trace_events
 
     class _ToolRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             yield AgentEvent(
@@ -315,7 +314,7 @@ def test_trace_persists_and_queryable_by_thread(tmp_path):
             yield AgentEvent("text", "done")
 
     async def go():
-        runners = {Tool.CLAUDE: _ToolRunner(), Tool.CODEX: _ToolRunner()}
+        runners = {"claude": _ToolRunner(), "codex": _ToolRunner()}
         svc = AgentService(tmp_path, runners=runners)
         prepared = svc.begin(_task(provider="codex", tags=["worker"], prompt="x", issue_id="issue-001", model="gpt-5.4"))
         async for _ in svc.run(prepared):
@@ -358,7 +357,7 @@ def test_claude_options_pass_effort():
 
 def test_service_routes_worker_through_codex_echo():
     async def run():
-        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
         service = AgentService("sample", runners=runners)
         task = _task(provider="codex", tags=["worker"], prompt="hello worker", issue_id="issue-003")
         return [ev async for ev in service.run(task)]
@@ -372,7 +371,7 @@ def test_service_routes_worker_through_codex_echo():
 
 
 def test_begin_node_run_is_callable_without_desktop(tmp_path):
-    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
     service = AgentService(tmp_path, runners=runners)
     node = create_node(
         service.state_db_path,
@@ -402,11 +401,11 @@ def test_begin_node_run_is_callable_without_desktop(tmp_path):
     assert prepared.task.cwd == (tmp_path / "repo")
     assert prepared.task.model == "gpt-5.4"
     assert prepared.task.effort == "high"
-    assert prepared.tool is Tool.CODEX
+    assert prepared.tool == "codex"
 
 
 def test_begin_node_run_resolves_model_effort_and_cwd_from_node(tmp_path):
-    runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
     service = AgentService(tmp_path, runners=runners)
     node = create_node(
         service.state_db_path,
@@ -432,7 +431,7 @@ def test_begin_node_run_resolves_model_effort_and_cwd_from_node(tmp_path):
     assert prepared.task.model == "gpt-5.4"
     assert prepared.task.effort == "xhigh"
     assert prepared.task.cwd == (tmp_path / "svc")
-    assert prepared.tool is Tool.CODEX
+    assert prepared.tool == "codex"
 
 
 def test_service_injects_node_skill_playbooks(tmp_path):
@@ -446,7 +445,7 @@ def test_service_injects_node_skill_playbooks(tmp_path):
     captured: list[str] = []
 
     class CapturingRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             captured.append(ctx.system_prompt)
@@ -454,7 +453,7 @@ def test_service_injects_node_skill_playbooks(tmp_path):
             yield AgentEvent("result", "ok")
 
     async def go():
-        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        runners = {"claude": CapturingRunner(), "codex": CapturingRunner()}
         service = AgentService(tmp_path, runners=runners)
         worker = create_node(
             service.state_db_path,
@@ -477,7 +476,7 @@ def test_service_injects_node_skill_playbooks(tmp_path):
 
 def test_service_allows_enforced_skill_obligation_when_marker_present(tmp_path):
     class _SkillRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             yield AgentEvent(
@@ -487,7 +486,7 @@ def test_service_allows_enforced_skill_obligation_when_marker_present(tmp_path):
             yield AgentEvent("result", "ok")
 
     async def go():
-        runners = {Tool.CLAUDE: _SkillRunner(), Tool.CODEX: _SkillRunner()}
+        runners = {"claude": _SkillRunner(), "codex": _SkillRunner()}
         service = AgentService(tmp_path, runners=runners)
         worker = create_node(
             service.state_db_path,
@@ -514,14 +513,14 @@ def test_service_allows_enforced_skill_obligation_when_marker_present(tmp_path):
 
 def test_service_raises_and_records_violation_when_enforced_skill_marker_missing(tmp_path):
     class _SkillRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             yield AgentEvent("text", "done")
             yield AgentEvent("result", "ok")
 
     async def go():
-        runners = {Tool.CLAUDE: _SkillRunner(), Tool.CODEX: _SkillRunner()}
+        runners = {"claude": _SkillRunner(), "codex": _SkillRunner()}
         service = AgentService(tmp_path, runners=runners)
         worker = create_node(
             service.state_db_path,
@@ -550,14 +549,14 @@ def test_service_raises_and_records_violation_when_enforced_skill_marker_missing
 
 def test_service_persists_actual_model_and_governance_violation(tmp_path):
     class _MismatchRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             yield AgentEvent("text", "done")
             yield AgentEvent("result", "", raw={"actual_model": "gpt-5.5"})
 
     async def go():
-        runners = {Tool.CLAUDE: _MismatchRunner(), Tool.CODEX: _MismatchRunner()}
+        runners = {"claude": _MismatchRunner(), "codex": _MismatchRunner()}
         service = AgentService(tmp_path, runners=runners)
         prepared = service.begin(_task(provider="codex", tags=["worker"], prompt="go", issue_id="issue-013", model="gpt-5.4"))
         async for _ in service.run(prepared):
@@ -582,7 +581,7 @@ def test_service_persists_run_lifecycle_and_transcript(tmp_path):
     (issues / "issue-003.md").write_text("ISSUE 003", encoding="utf-8")
 
     async def go():
-        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
         service = AgentService(tmp_path, runners=runners)
         prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="design the fix", issue_id="issue-003"))
 
@@ -610,7 +609,7 @@ def test_service_persists_run_lifecycle_and_transcript(tmp_path):
 
 def test_service_creates_new_thread_per_run(tmp_path):
     async def go():
-        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
         service = AgentService(tmp_path, runners=runners)
 
         first = service.begin(_task(provider="claude", tags=["architect"], prompt="first pass", issue_id="issue-003"))
@@ -634,7 +633,7 @@ def test_service_creates_new_thread_per_run(tmp_path):
 
 def test_runs_serialize_per_node_but_parallel_across_nodes(tmp_path):
     class CountingRunner:
-        tool = Tool.CLAUDE
+        tool = "claude"
 
         def __init__(self):
             self.active = 0
@@ -654,7 +653,7 @@ def test_runs_serialize_per_node_but_parallel_across_nodes(tmp_path):
 
     async def same_actor():
         runner = CountingRunner()
-        service = AgentService(tmp_path / "same", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        service = AgentService(tmp_path / "same", runners={"claude": runner, "codex": runner})
         node = create_node(service.state_db_path, tmp_path / "same", "Architect", "claude", ["architect"], [])
         await asyncio.gather(
             drain(service, _task(node_id=node.node_id, provider="claude", tags=["architect"], prompt="one", issue_id="issue-003")),
@@ -664,7 +663,7 @@ def test_runs_serialize_per_node_but_parallel_across_nodes(tmp_path):
 
     async def different_nodes():
         runner = CountingRunner()
-        service = AgentService(tmp_path / "different", runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+        service = AgentService(tmp_path / "different", runners={"claude": runner, "codex": runner})
         architect = create_node(service.state_db_path, tmp_path / "different", "Architect", "claude", ["architect"], [])
         qa = create_node(service.state_db_path, tmp_path / "different", "QA", "claude", ["qa"], [])
         await asyncio.gather(
@@ -678,12 +677,12 @@ def test_runs_serialize_per_node_but_parallel_across_nodes(tmp_path):
 
 
 def test_service_marks_incomplete_runs_interrupted_on_next_open(tmp_path):
-    service = AgentService(tmp_path, runners={Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)})
+    service = AgentService(tmp_path, runners={"claude": EchoRunner("claude"), "codex": EchoRunner("codex")})
     prepared = service.begin(_task(provider="claude", tags=["architect"], prompt="recover me", issue_id="issue-003"))
 
     interrupted_service = AgentService(
         tmp_path,
-        runners={Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)},
+        runners={"claude": EchoRunner("claude"), "codex": EchoRunner("codex")},
     )
     interrupted = get_run(interrupted_service.state_db_path, prepared.run_id)
     turns = list_turns(interrupted_service.state_db_path, prepared.thread_id)
@@ -708,7 +707,7 @@ def test_second_run_starts_with_clean_context(tmp_path):
     captured_prompts: list[str] = []
 
     class CapturingRunner:
-        tool = Tool.CLAUDE
+        tool = "claude"
 
         async def run(self, contract, ctx):
             captured_prompts.append(ctx.system_prompt)
@@ -716,7 +715,7 @@ def test_second_run_starts_with_clean_context(tmp_path):
             yield AgentEvent("result", "done")
 
     async def go():
-        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        runners = {"claude": CapturingRunner(), "codex": CapturingRunner()}
         service = AgentService(tmp_path, runners=runners)
         task = _task(provider="claude", tags=["architect"], prompt="first message", issue_id="issue-001")
         async for _ in service.run(task):
@@ -744,7 +743,7 @@ def test_node_context_is_clean_slate_with_layered_directives_and_same_node_repla
     captured: list[tuple[str, str]] = []
 
     class CapturingRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             captured.append((contract.node_id, ctx.system_prompt))
@@ -752,7 +751,7 @@ def test_node_context_is_clean_slate_with_layered_directives_and_same_node_repla
             yield AgentEvent("result", "done")
 
     async def go():
-        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        runners = {"claude": CapturingRunner(), "codex": CapturingRunner()}
         service = AgentService(tmp_path, runners=runners)
         worker = create_node(
             service.state_db_path,
@@ -876,7 +875,7 @@ def test_distillation_candidate_promotes_into_later_run_context(tmp_path):
     captured: list[str] = []
 
     class DistillingRunner:
-        tool = Tool.CODEX
+        tool = "codex"
 
         async def run(self, contract, ctx):
             captured.append(ctx.system_prompt)
@@ -895,7 +894,7 @@ def test_distillation_candidate_promotes_into_later_run_context(tmp_path):
             yield AgentEvent("result", "done", raw={"actual_model": contract.model})
 
     async def go():
-        runners = {Tool.CLAUDE: DistillingRunner(), Tool.CODEX: DistillingRunner()}
+        runners = {"claude": DistillingRunner(), "codex": DistillingRunner()}
         service = AgentService(tmp_path, runners=runners)
         worker = create_node(
             service.state_db_path,

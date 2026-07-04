@@ -16,7 +16,6 @@ from hephaestus.index import build_context
 from hephaestus.integration.contract_resolution import resolve as resolve_contract
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.providers import ProviderRegistry, provider_key, provider_registry
-from hephaestus.integration.routing import Tool
 from hephaestus.integration.runners import (
     AgentEvent,
     AgentRunner,
@@ -44,7 +43,7 @@ class PreparedRun:
     node_id: str
     thread_id: str
     run_id: str
-    tool: Tool | str
+    tool: str
     ctx: SessionContext
 
 
@@ -59,14 +58,7 @@ class GovernanceViolationError(RuntimeError):
         return "; ".join(f"{v.rule_id}: {v.message}" for v in self.violations)
 
 
-def _display_tool(provider: str) -> Tool | str:
-    try:
-        return Tool(provider)
-    except ValueError:
-        return provider
-
-
-def _normalize_runners(runners: dict[Tool | str, AgentRunner]) -> dict[str, AgentRunner]:
+def _normalize_runners(runners: dict[str, AgentRunner]) -> dict[str, AgentRunner]:
     return {provider_key(key): runner for key, runner in runners.items()}
 
 
@@ -78,7 +70,7 @@ class AgentService:
     def __init__(
         self,
         root: str | Path,
-        runners: dict[Tool | str, AgentRunner] | None = None,
+        runners: dict[str, AgentRunner] | None = None,
         registry: ProviderRegistry | None = None,
     ):
         self.root = Path(root).resolve()
@@ -114,10 +106,9 @@ class AgentService:
             machine=str(self.root),
         )
 
-    def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[Tool | str, SessionContext]:
+    def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[str, SessionContext]:
         resolved = node or self._resolve_node(task)
         provider = self.provider_registry.resolve_provider(task.model, task.provider, resolved.provider)
-        tool = _display_tool(provider)
         workflow_id = task.workflow_id or task.issue_id or None
         placement_id = task.placement_id or (resolved.node_id if workflow_id else None)
         ctx = self._session_context(
@@ -127,7 +118,7 @@ class AgentService:
             workflow_run_id=task.workflow_run_id or None,
             placement_id=placement_id,
         )
-        return tool, ctx
+        return provider, ctx
 
     def task_for_node(
         self,
@@ -244,7 +235,6 @@ class AgentService:
     def begin(self, task: AgentTask) -> PreparedRun:
         node = self._resolve_node(task)
         provider = self.provider_registry.resolve_provider(task.model, task.provider, node.provider)
-        tool = _display_tool(provider)
         workflow_id = task.workflow_id or task.issue_id or None
         workflow_run_id = task.workflow_run_id or uuid4().hex
         placement_id = task.placement_id or (node.node_id if workflow_id else None)
@@ -295,7 +285,7 @@ class AgentService:
             node_id=node.node_id,
             thread_id=thread.id,
             run_id=run.id,
-            tool=tool,
+            tool=provider,
             ctx=ctx,
         )
 
@@ -415,8 +405,9 @@ class AgentService:
 
 
 def main(argv: list[str] | None = None) -> int:
+    registry = provider_registry()
     p = argparse.ArgumentParser(prog="hephaestus.integration", description="Run a node-task.")
-    p.add_argument("provider", choices=[tool.value for tool in Tool])
+    p.add_argument("provider", choices=sorted(registry.keys()))
     p.add_argument("prompt")
     p.add_argument("--tags", default="", help="comma-separated tags")
     p.add_argument("--issue", help="issue id to inject the spec for")
@@ -429,10 +420,10 @@ def main(argv: list[str] | None = None) -> int:
 
     runners = None
     if args.echo:
-        runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+        runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
 
     tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
-    service = AgentService(args.root, runners=runners)
+    service = AgentService(args.root, runners=runners, registry=registry)
     task = AgentTask(
         node_id=None,
         provider=args.provider,
@@ -444,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         effort=args.effort,
     )
     tool, ctx = service.resolve(task)
-    print(f"-> provider={task.provider}  tool={getattr(tool, 'value', tool)}  context={[p.name for p in ctx.files]}")
+    print(f"-> provider={task.provider}  tool={tool}  context={[p.name for p in ctx.files]}")
     if ctx.missing:
         print(f"  (missing OKF files: {[p.name for p in ctx.missing]})")
 

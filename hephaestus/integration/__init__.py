@@ -1,11 +1,6 @@
 """Agent integration layer (spec/architecture.md §5)."""
 from hephaestus.contract import ExecutionContract
-from hephaestus.integration.routing import (
-    TAG_DIRECTIVE,
-    PROVIDER_TOOL,
-    Tool,
-    tool_for_provider,
-)
+from hephaestus.integration.routing import TAG_DIRECTIVE
 from hephaestus.integration.context import SessionContext, build_session_context
 from hephaestus.integration.contract_resolution import resolve as resolve_execution_contract
 from hephaestus.integration.runners import (
@@ -20,7 +15,7 @@ from hephaestus.integration.runners import (
 from hephaestus.integration.service import AgentService, default_runners
 
 __all__ = [
-    "Tool", "tool_for_provider", "PROVIDER_TOOL", "TAG_DIRECTIVE",
+    "TAG_DIRECTIVE",
     "ExecutionContract",
     "SessionContext", "build_session_context",
     "resolve_execution_contract",

@@ -9,7 +9,6 @@ import pytest
 
 from hephaestus.contract import ExecutionContract
 from hephaestus.integration.context import SessionContext
-from hephaestus.integration.routing import Tool
 from hephaestus.integration.runners import AgentTask
 from hephaestus.integration.service import PreparedRun
 from hephaestus.store.nodes import create_node
@@ -21,10 +20,10 @@ def test_desktop_streams_agent_events_via_bridge():
     """start_agent runs on the core loop and pushes events to the window (echo, no live calls)."""
     pytest.importorskip("webview")
     from hephaestus.desktop import DesktopApp
-    from hephaestus.integration import EchoRunner, Tool
+    from hephaestus.integration import EchoRunner
 
     app = DesktopApp("sample")
-    app._agents.runners = {Tool.CLAUDE: EchoRunner(Tool.CLAUDE), Tool.CODEX: EchoRunner(Tool.CODEX)}
+    app._agents.runners = {"claude": EchoRunner("claude"), "codex": EchoRunner("codex")}
 
     pushed: list[str] = []
 
@@ -114,14 +113,14 @@ def test_desktop_forwards_run_construction_to_agent_service(tmp_path):
                     effort=kwargs["effort"],
                     tools=[],
                     prompt=kwargs["prompt"],
-                    tool=Tool.CLAUDE.value,
+                    tool="claude",
                     issue_id=kwargs["issue_id"],
                     cwd=kwargs["cwd"],
                 ),
                 node_id="node-001",
                 thread_id="thread-001",
                 run_id="run-001",
-                tool=Tool.CLAUDE,
+                tool="claude",
                 ctx=SessionContext(node_id="node-001", tags=kwargs["tags"], issue_id=kwargs["issue_id"], files=[], missing=[], system_prompt=""),
             )
 
@@ -140,13 +139,13 @@ def test_desktop_forwards_run_construction_to_agent_service(tmp_path):
                     effort=None,
                     tools=[],
                     prompt=kwargs["prompt"],
-                    tool=Tool.CODEX.value,
+                    tool="codex",
                     issue_id=kwargs["issue_id"],
                 ),
                 node_id=kwargs["node_id"],
                 thread_id="thread-002",
                 run_id="run-002",
-                tool=Tool.CODEX,
+                tool="codex",
                 ctx=SessionContext(node_id=kwargs["node_id"], tags=["worker"], issue_id=kwargs["issue_id"], files=[], missing=[], system_prompt=""),
             )
 

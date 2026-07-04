@@ -9,7 +9,7 @@ from hephaestus.integration.providers import (
     build_provider_registry,
 )
 from hephaestus.integration.runners import AgentEvent, AgentTask, EchoRunner
-from hephaestus.integration.service import AgentService
+from hephaestus.integration.service import AgentService, main
 
 
 def _contract(**kwargs) -> ExecutionContract:
@@ -81,6 +81,31 @@ def test_fake_provider_can_register_and_drive_routing_and_catalog(tmp_path):
     events = asyncio.run(go())
     # The runner that ran came from the injected registry — proves the seam end to end.
     assert any("echo:gemini_cli" in event.text for event in events)
+
+
+def test_cli_provider_choices_follow_registry_keys(tmp_path, monkeypatch, capsys):
+    registry = build_provider_registry()
+    registry.register(
+        Provider(
+            key="gemini_cli",
+            runner=EchoRunner("gemini_cli"),
+            normalize_event=lambda raw: AgentEvent("text", raw["message"], raw=raw),
+            flags=lambda contract: {"cwd": contract.cwd or "."},
+            discover_models=lambda: {
+                "provider": "gemini_cli",
+                "models": [{"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro", "efforts": ["low", "high"]}],
+            },
+            owns_model=lambda model: bool(model and model.startswith("gemini-")),
+        )
+    )
+    monkeypatch.setattr("hephaestus.integration.service.provider_registry", lambda: registry)
+
+    rc = main(["gemini_cli", "sketch", "--root", str(tmp_path)])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "provider=gemini_cli" in out
+    assert "echo:gemini_cli" in out
 
 
 def test_resolve_provider_prefers_model_owner_then_first_truthy_fallback():
