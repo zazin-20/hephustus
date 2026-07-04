@@ -92,6 +92,42 @@ def test_context_reports_missing_files(tmp_path):
     assert any(p.name == "issue-001.md" for p in ctx.missing)
 
 
+def test_context_injects_skill_playbooks(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "worker").mkdir(parents=True)
+    (agents / "worker" / "claude.md").write_text("WORKER DIRECTIVE", encoding="utf-8")
+    (agents / "worker" / "tdd.md").write_text("TDD PLAYBOOK", encoding="utf-8")
+    (agents / "skills").mkdir(parents=True)
+    (agents / "skills" / "grill-me.md").write_text("GRILL ME PLAYBOOK", encoding="utf-8")
+
+    ctx = build_session_context(
+        tmp_path,
+        node_id="node-001",
+        tags=["worker"],
+        skills=["skill:grill-me"],
+    )
+
+    assert {p.name for p in ctx.files} == {"claude.md", "tdd.md", "grill-me.md"}
+    assert ctx.missing == []
+    assert "# Skills" in ctx.system_prompt
+    assert "GRILL ME PLAYBOOK" in ctx.system_prompt
+
+
+def test_context_reports_missing_skill_playbooks(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "architect").mkdir(parents=True)
+    (agents / "architect" / "architect.md").write_text("ARCHITECT DIRECTIVE", encoding="utf-8")
+
+    ctx = build_session_context(
+        tmp_path,
+        node_id="node-001",
+        tags=["architect"],
+        skills=["skill:grill-me"],
+    )
+
+    assert any(path.name == "grill-me.md" for path in ctx.missing)
+
+
 def test_codex_event_parses_real_schema():
     """Locks in the codex-cli 0.130.0 JSONL schema observed in live testing."""
     msg = _codex_normalize_event(
@@ -396,6 +432,46 @@ def test_begin_node_run_resolves_model_effort_and_cwd_from_node(tmp_path):
     assert prepared.task.effort == "xhigh"
     assert prepared.task.cwd == (tmp_path / "svc")
     assert prepared.tool is Tool.CODEX
+
+
+def test_service_injects_node_skill_playbooks(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "worker").mkdir(parents=True)
+    (agents / "worker" / "claude.md").write_text("WORKER DIRECTIVE", encoding="utf-8")
+    (agents / "worker" / "tdd.md").write_text("TDD PLAYBOOK", encoding="utf-8")
+    (agents / "skills").mkdir(parents=True)
+    (agents / "skills" / "grill-me.md").write_text("GRILL ME PLAYBOOK", encoding="utf-8")
+
+    captured: list[str] = []
+
+    class CapturingRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            captured.append(ctx.system_prompt)
+            yield AgentEvent("text", "done")
+            yield AgentEvent("result", "ok")
+
+    async def go():
+        runners = {Tool.CLAUDE: CapturingRunner(), Tool.CODEX: CapturingRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        worker = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="Worker",
+            provider="codex",
+            tags=["worker"],
+            rules=[],
+            skills=["skill:grill-me"],
+        )
+        async for _ in service.run(service.task_for_node(node_id=worker.node_id, prompt="use the skill")):
+            pass
+
+    asyncio.run(go())
+
+    assert len(captured) == 1
+    assert "# Skills" in captured[0]
+    assert "GRILL ME PLAYBOOK" in captured[0]
 
 
 def test_service_persists_actual_model_and_governance_violation(tmp_path):

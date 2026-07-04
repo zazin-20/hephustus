@@ -89,6 +89,7 @@ class AgentService:
             node_id=node.node_id,
             tags=node.tags,
             issue_id=task.issue_id,
+            skills=node.skills,
             inputs=node.inputs,
             outputs=node.outputs,
             db_path=self.state_db_path,

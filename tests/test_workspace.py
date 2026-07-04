@@ -49,6 +49,7 @@ def test_workspace_open_scaffolds_okf_tree(tmp_path):
     assert (root / "agents" / "identities").is_dir()
     assert (root / "agents" / "workflows").is_dir()
     assert (root / "agents" / "archive").is_dir()
+    assert (root / "agents" / "skills").is_dir()
     assert (root / "agents" / "architect" / "issues" / "index.md").exists()
 
 
