@@ -276,24 +276,24 @@ snapshots), split into `test-cases/<area>.md` keeping the same ID scheme and an
 | TC-CODE-003 | Read file returns language + content | source file | `read_file` | correct language tag, content | integration | covered |
 | TC-CODE-004 | Binary file flagged | file with NUL bytes | read_file | `binary: true`, empty content | integration | partial |
 | TC-CODE-005 | Oversize file truncated | file > 1MB | read_file | `truncated: true` | integration | gap |
-| TC-CODE-006 | Path escape rejected | `../` outside root | `read_file`/`tree` | `ValueError("path escapes repo root")` | security | gap |
+| TC-CODE-006 | Path escape rejected | `../` outside root | `read_file`/`tree` | `ValueError("path escapes repo root")` | security | covered |
 | TC-CODE-007 | Unknown repo rejected | bad repo name | any call | `ValueError("unknown repo")` | integration | partial |
 
 ## DESK — Desktop bridge
 
 | ID | Title | Pre | Steps | Expected | Type | Status |
 |---|---|---|---|---|---|---|
-| TC-DESK-001 | `get_state`/`rescan` return snapshot | app bound | call | dashboard envelope with keys | integration | partial |
+| TC-DESK-001 | `get_state`/`rescan` return snapshot | app bound | call | dashboard envelope with keys | integration | covered |
 | TC-DESK-002 | `list_rules` returns governance layer | app | `list_rules` | G-001/2/3 with id/name/severity/fix_hint | integration | covered |
-| TC-DESK-003 | `create_node`/`delete_node`/`list_nodes` | app | round-trip | node appears then removed | integration | partial |
-| TC-DESK-004 | `save_workflow`/`list_workflows` | app | save then list | workflow persisted + returned | integration | partial |
+| TC-DESK-003 | `create_node`/`delete_node`/`list_nodes` | app | round-trip | node appears then removed | integration | covered |
+| TC-DESK-004 | `save_workflow`/`list_workflows` | app | save then list | workflow persisted + returned | integration | covered |
 | TC-DESK-005 | `run_workflow` starts session | app + saved workflow | call | returns running status; session captured | integration | gap |
-| TC-DESK-006 | `parse_handoff_marker` bridge | agent text | call | dict or null | integration | partial |
-| TC-DESK-007 | `evaluate_spawn` bridge | role/task/issue | call | SpawnCard dict with gating | integration | partial |
-| TC-DESK-008 | `save_correction`/`get_corrections` | app | round-trip | correction persisted + listed | integration | partial |
+| TC-DESK-006 | `parse_handoff_marker` bridge | agent text | call | dict or null | integration | covered |
+| TC-DESK-007 | `evaluate_spawn` bridge | role/task/issue | call | SpawnCard dict with gating | integration | covered |
+| TC-DESK-008 | `save_correction`/`get_corrections` | app | round-trip | correction persisted + listed | integration | covered |
 | TC-DESK-009 | `get_trace` filters | app | call w/ run/node/thread | filtered events | integration | partial |
 | TC-DESK-010 | `pick_directory` returns choice or null | app window | call | chosen path or null | manual | gap |
-| TC-DESK-011 | Bridge without app raises | Bridge, no app | node calls | `RuntimeError("no app bound")` | unit | gap |
+| TC-DESK-011 | Bridge without app raises | Bridge, no app | node calls | `RuntimeError("no app bound")` | unit | covered |
 
 ## UI — Frontend flows (Playwright / manual)
 
@@ -316,7 +316,7 @@ snapshots), split into `test-cases/<area>.md` keeping the same ID scheme and an
 
 | ID | Title | Pre | Steps | Expected | Type | Status |
 |---|---|---|---|---|---|---|
-| TC-SEC-001 | Code viewer path traversal blocked | repo root | request `../../etc` | `ValueError`, no read | security | gap |
+| TC-SEC-001 | Code viewer path traversal blocked | repo root | request `../../etc` | `ValueError`, no read | security | covered |
 | TC-SEC-002 | Code viewer is read-only | any repo | attempt write path | no write method exists on surface | security | gap |
 | TC-SEC-003 | Scope adherence blocks out-of-scope writes | run with allowed_paths | agent writes elsewhere | G-001 ERROR, run fails | security | gap |
 | TC-SEC-004 | Effort escalation is explicit | high-effort contract | resolve flags | `bypassPermissions`/`danger-full-access` only at high; documented risk | security | gap |
