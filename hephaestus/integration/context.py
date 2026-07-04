@@ -103,6 +103,8 @@ def _render_constitution(
             ),
         )
         for rule in rules:
+            if rule.kind != "directive":
+                continue
             parts.append(f"## {rule.scope}:{rule.topic_key}\n{rule.body}")
     if not parts:
         return ""
