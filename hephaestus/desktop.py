@@ -28,6 +28,14 @@ from hephaestus.store.threads import list_threads as list_thread_records
 from hephaestus.store.threads import list_turns as list_turn_records
 from hephaestus.store.threads import set_included as set_turn_included_record
 from hephaestus.watch import OKFWatcher
+from hephaestus.workflow_runtime import WorkflowRuntime
+from hephaestus.workflows import (
+    list_workflows as list_workflow_records,
+    load_workflow,
+    save_workflow as save_workflow_record,
+    workflow_from_dict,
+    workflow_to_dict,
+)
 from hephaestus.workspace import Workspace
 
 try:
@@ -52,9 +60,13 @@ class Bridge:
 
     # Compliance / dashboard
     def get_state(self) -> dict:
+        if self._app is not None:
+            return self._app._snapshot_state()
         return snapshot(self._root)
 
     def rescan(self) -> dict:
+        if self._app is not None:
+            return self._app._snapshot_state()
         return snapshot(self._root)
 
     # Catalog (model/effort) + rule set — feed the Coordinator form dropdowns
@@ -101,6 +113,19 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         nodes = list_node_records(self._app._workspace.state_db_path)
         return [{**asdict(node), "status": "idle"} for node in nodes]
+
+    def list_workflows(self) -> list[dict]:
+        return [workflow_to_dict(workflow) for workflow in list_workflow_records(self._root)]
+
+    def save_workflow(self, payload: dict, suffix: str = ".yaml") -> dict:
+        workflow = workflow_from_dict(payload)
+        path = save_workflow_record(self._root, workflow, suffix=suffix or ".yaml")
+        return {"path": str(path), "workflow": workflow_to_dict(workflow)}
+
+    def run_workflow(self, workflow_id: str, prompts: dict | None = None) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        return self._app.start_workflow(workflow_id, prompts or {})
 
     def create_node(
         self,
@@ -250,12 +275,16 @@ class DesktopApp:
         self._window = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._watcher: OKFWatcher | None = None
+        self._workflow_sessions: dict[str, dict] = {}
+
+    def _snapshot_state(self) -> dict:
+        return snapshot(self._root, workflow_sessions=self._workflow_sessions)
 
     def _push(self, _delta) -> None:
         """Recompute the full snapshot and push it to the UI (guarded in JS)."""
         if self._window is None:
             return
-        payload = json.dumps(snapshot(self._root))
+        payload = json.dumps(self._snapshot_state())
         self._window.evaluate_js(
             f"window.__hephaestus_push__ && window.__hephaestus_push__({payload})"
         )
@@ -293,6 +322,53 @@ class DesktopApp:
             model=model,
         )
         return self._launch_prepared(prepared)
+
+    def start_workflow(self, workflow_id: str, prompts: dict | None = None) -> dict:
+        if self._loop is None:
+            raise RuntimeError("core loop not started yet")
+        asyncio.run_coroutine_threadsafe(
+            self._run_workflow(workflow_id, prompts or {}),
+            self._loop,
+        )
+        return {"workflow_id": workflow_id, "status": "running"}
+
+    async def _run_workflow(self, workflow_id: str, prompts: dict[str, str]) -> None:
+        from hephaestus.store.nodes import get_node
+
+        workflow = self._load_workflow_for_id(workflow_id)
+        runtime = WorkflowRuntime(self._root, service=self._agents)
+        resolved_prompts: dict[str, str] = {}
+        for placement in workflow.placements:
+            node = get_node(self._workspace.state_db_path, placement.node_id)
+            resolved_prompts[placement.placement_id] = prompts.get(
+                placement.placement_id,
+                f"Execute workflow step {node.name}.",
+            )
+
+        def _capture(update: dict) -> None:
+            self._workflow_sessions[workflow_id] = update
+            self._push(None)
+
+        result = await runtime.run(
+            workflow,
+            prompts=resolved_prompts,
+            on_update=_capture,
+        )
+        current = self._workflow_sessions.get(workflow_id, {})
+        self._workflow_sessions[workflow_id] = {
+            **current,
+            "workflow_id": workflow_id,
+            "workflow_run_id": result.workflow_run_id,
+            "status": result.status.value,
+        }
+        self._push(None)
+
+    def _load_workflow_for_id(self, workflow_id: str):
+        for suffix in (".yaml", ".yml", ".json"):
+            path = self._workspace.root / "agents" / "workflows" / f"{workflow_id}{suffix}"
+            if path.is_file():
+                return load_workflow(path)
+        raise FileNotFoundError(workflow_id)
 
     def _launch_prepared(self, prepared) -> dict:
         asyncio.run_coroutine_threadsafe(self._stream_agent(prepared), self._loop)

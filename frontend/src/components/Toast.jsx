@@ -11,6 +11,7 @@ const SEVERITY_STYLE = {
   error: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
   warning: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
   info: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
+  ok: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
 }
 
 function CorrectionBox({ toast, onClose }) {
@@ -84,6 +85,7 @@ function ToastCard({ toast, onDismiss }) {
 
   const sev = toast.severity || 'info'
   const badge = SEVERITY_STYLE[sev] || SEVERITY_STYLE.info
+  const canCorrect = toast.allowCorrection !== false && Boolean(toast.rule_id || toast.issue_id || toast.node_id)
 
   return (
     <>
@@ -110,23 +112,25 @@ function ToastCard({ toast, onDismiss }) {
           )}
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => { pauseTimer(); setCorrecting(true) }}
-            className="flex-1 rounded-lg border border-orange-500/30 bg-orange-500/10 px-2 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-500/20"
-          >
-            Correct →
-          </button>
+          {canCorrect && (
+            <button
+              type="button"
+              onClick={() => { pauseTimer(); setCorrecting(true) }}
+              className="flex-1 rounded-lg border border-orange-500/30 bg-orange-500/10 px-2 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-500/20"
+            >
+              Correct →
+            </button>
+          )}
           <button
             type="button"
             onClick={onDismiss}
-            className="rounded-lg border border-white/10 px-2 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/5"
+            className={`${canCorrect ? '' : 'flex-1 '}rounded-lg border border-white/10 px-2 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/5`}
           >
             Dismiss
           </button>
         </div>
       </div>
-      {correcting && <CorrectionBox toast={toast} onClose={() => { setCorrecting(false); onDismiss() }} />}
+      {correcting && canCorrect && <CorrectionBox toast={toast} onClose={() => { setCorrecting(false); onDismiss() }} />}
     </>
   )
 }

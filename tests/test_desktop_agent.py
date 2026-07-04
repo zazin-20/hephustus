@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import threading
 import time
 
@@ -13,6 +14,7 @@ from hephaestus.integration.runners import AgentTask
 from hephaestus.integration.service import PreparedRun
 from hephaestus.store.nodes import create_node
 from hephaestus.store.threads import append_turn, get_or_create_thread
+from hephaestus.workflows import load_workflow
 
 
 def test_desktop_streams_agent_events_via_bridge():
@@ -192,3 +194,50 @@ def test_desktop_forwards_run_construction_to_agent_service(tmp_path):
     }]
     assert role_run["run_id"] == "run-001"
     assert profile_run["run_id"] == "run-002"
+
+
+def test_bridge_save_workflow_persists_canvas_payload(tmp_path):
+    from hephaestus.desktop import Bridge
+
+    app_root = tmp_path
+    bridge = Bridge(app_root, [])
+
+    saved = bridge.save_workflow(
+        {
+            "workflow_id": "issue-025",
+            "placements": [
+                {
+                    "placement_id": "draft",
+                    "node_id": "node-001",
+                    "x": 120,
+                    "y": 80,
+                    "interactivity": "hitl",
+                }
+            ],
+            "edges": [],
+        },
+        ".json",
+    )
+
+    assert Path(saved["path"]).as_posix().endswith("agents/workflows/issue-025.json")
+    assert load_workflow(app_root / "agents" / "workflows" / "issue-025.json").placements[0].interactivity.value == "hitl"
+
+
+def test_bridge_run_workflow_forwards_to_app():
+    from hephaestus.desktop import Bridge
+
+    class FakeApp:
+        def __init__(self):
+            self.calls = []
+
+        def start_workflow(self, workflow_id, prompts):
+            self.calls.append((workflow_id, prompts))
+            return {"workflow_id": workflow_id, "status": "running"}
+
+    app = FakeApp()
+    bridge = Bridge("sample", [], app=app)
+
+    result = bridge.run_workflow("issue-025", {"draft": "ship it"})
+
+    assert app.calls == [("issue-025", {"draft": "ship it"})]
+    assert result == {"workflow_id": "issue-025", "status": "running"}

@@ -22,6 +22,23 @@ export async function rescan() {
 
 export const hasBridge = () => Boolean(window.pywebview && window.pywebview.api)
 
+// --- Workflow canvas ---
+
+export async function listWorkflows() {
+  if (window.pywebview?.api?.list_workflows) return await window.pywebview.api.list_workflows()
+  return null
+}
+
+export async function saveWorkflow(payload, suffix = '.yaml') {
+  if (window.pywebview?.api?.save_workflow) return await window.pywebview.api.save_workflow(payload, suffix)
+  return null
+}
+
+export async function runWorkflow(workflowId, prompts = {}) {
+  if (window.pywebview?.api?.run_workflow) return await window.pywebview.api.run_workflow(workflowId, prompts)
+  return null
+}
+
 // --- Code viewer (read-only) ---
 export async function listRepos() {
   if (window.pywebview?.api?.list_repos) return await window.pywebview.api.list_repos()
