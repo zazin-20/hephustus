@@ -121,6 +121,7 @@ class WorkflowRuntime:
         confirm_edges: set[tuple[str, str]] | None = None,
         override_placements: set[str] | None = None,
         human_inputs: dict[str, str] | None = None,
+        on_update=None,
     ) -> WorkflowRunResult:
         placements = {placement.placement_id: placement for placement in workflow.placements}
         outgoing = self._outgoing_edges(workflow.edges)
@@ -130,6 +131,20 @@ class WorkflowRuntime:
         queue = self._start_placements(workflow)
         steps: list[WorkflowStepResult] = []
         workflow_run_id = uuid4().hex
+        node_states = {
+            placement.placement_id: {
+                "placement_id": placement.placement_id,
+                "node_id": placement.node_id,
+                "status": WorkflowStatus.NOT_STARTED.value,
+                "run_id": None,
+                "thread_id": None,
+                "failures": [],
+                "override_available": False,
+                "spawn_card": None,
+            }
+            for placement in workflow.placements
+        }
+        notifications: list[dict] = []
 
         while queue:
             placement_id = queue.pop(0)
@@ -143,6 +158,24 @@ class WorkflowRuntime:
                     status=WorkflowStatus.WAITING_HUMAN,
                 )
                 steps.append(step)
+                node_states[placement_id] = self._node_state_payload(step)
+                notifications.append(
+                    self._notification(
+                        workflow_run_id,
+                        placement_id,
+                        "hitl_needed",
+                        "info",
+                        f"{node.name} needs human input.",
+                    )
+                )
+                self._emit_update(
+                    on_update,
+                    workflow,
+                    workflow_run_id,
+                    WorkflowStatus.WAITING_HUMAN,
+                    node_states=node_states,
+                    notifications=notifications,
+                )
                 return WorkflowRunResult(
                     workflow_id=workflow.workflow_id,
                     workflow_run_id=workflow_run_id,
@@ -160,6 +193,15 @@ class WorkflowRuntime:
                     override_available=True,
                 )
                 steps.append(step)
+                node_states[placement_id] = self._node_state_payload(step)
+                self._emit_update(
+                    on_update,
+                    workflow,
+                    workflow_run_id,
+                    WorkflowStatus.BLOCKED,
+                    node_states=node_states,
+                    notifications=notifications,
+                )
                 if placement_id not in override_placements:
                     return WorkflowRunResult(
                         workflow_id=workflow.workflow_id,
@@ -179,6 +221,20 @@ class WorkflowRuntime:
                 workflow_id=workflow.workflow_id,
                 workflow_run_id=workflow_run_id,
                 placement_id=placement_id,
+            )
+            node_states[placement_id] = {
+                **node_states[placement_id],
+                "status": WorkflowStatus.RUNNING.value,
+                "run_id": prepared.run_id,
+                "thread_id": prepared.thread_id,
+            }
+            self._emit_update(
+                on_update,
+                workflow,
+                workflow_run_id,
+                WorkflowStatus.RUNNING,
+                node_states=node_states,
+                notifications=notifications,
             )
             async for _ in self.service.run(prepared):
                 pass
@@ -213,6 +269,15 @@ class WorkflowRuntime:
                     override_available=True,
                 )
                 steps.append(step)
+                node_states[placement_id] = self._node_state_payload(step)
+                self._emit_update(
+                    on_update,
+                    workflow,
+                    workflow_run_id,
+                    WorkflowStatus.BLOCKED,
+                    node_states=node_states,
+                    notifications=notifications,
+                )
                 return WorkflowRunResult(
                     workflow_id=workflow.workflow_id,
                     workflow_run_id=workflow_run_id,
@@ -232,6 +297,24 @@ class WorkflowRuntime:
                     spawn_card=card,
                 )
                 steps.append(step)
+                node_states[placement_id] = self._node_state_payload(step)
+                notifications.append(
+                    self._notification(
+                        workflow_run_id,
+                        placement_id,
+                        "node_done_green",
+                        "ok",
+                        f"{node.name} is done and awaiting confirmation.",
+                    )
+                )
+                self._emit_update(
+                    on_update,
+                    workflow,
+                    workflow_run_id,
+                    WorkflowStatus.AWAITING_CONFIRM,
+                    node_states=node_states,
+                    notifications=notifications,
+                )
                 return WorkflowRunResult(
                     workflow_id=workflow.workflow_id,
                     workflow_run_id=workflow_run_id,
@@ -250,6 +333,16 @@ class WorkflowRuntime:
                     spawn_card=card if next_edges else None,
                 )
             )
+            node_states[placement_id] = self._node_state_payload(steps[-1])
+            notifications.append(
+                self._notification(
+                    workflow_run_id,
+                    placement_id,
+                    "node_done_green",
+                    "ok",
+                    f"{node.name} is done.",
+                )
+            )
             for edge in next_edges:
                 if edge.advance == AdvanceMode.ALLOW or (
                     edge.from_placement_id,
@@ -260,11 +353,103 @@ class WorkflowRuntime:
                     }:
                         queue.append(edge.to_placement_id)
 
+        self._emit_update(
+            on_update,
+            workflow,
+            workflow_run_id,
+            WorkflowStatus.DONE,
+            node_states=node_states,
+            notifications=notifications,
+        )
         return WorkflowRunResult(
             workflow_id=workflow.workflow_id,
             workflow_run_id=workflow_run_id,
             status=WorkflowStatus.DONE,
             steps=steps,
+        )
+
+    @staticmethod
+    def _node_state_payload(step: WorkflowStepResult) -> dict:
+        return {
+            "placement_id": step.placement_id,
+            "node_id": step.node_id,
+            "status": step.status.value,
+            "run_id": step.run_id,
+            "thread_id": step.thread_id,
+            "failures": [
+                {
+                    "rule_id": failure.rule_id,
+                    "severity": failure.severity.value,
+                    "message": failure.message,
+                    "artifact": failure.artifact,
+                    "fix_hint": failure.fix_hint,
+                }
+                for failure in step.failures
+            ],
+            "override_available": step.override_available,
+            "spawn_card": (
+                {
+                    "gating": step.spawn_card.gating.value,
+                    "marker": {
+                        "role": step.spawn_card.marker.role,
+                        "task": step.spawn_card.marker.task,
+                        "issue_id": step.spawn_card.marker.issue_id,
+                    },
+                    "failures": [
+                        {
+                            "rule_id": failure.rule_id,
+                            "severity": failure.severity.value,
+                            "message": failure.message,
+                            "artifact": failure.artifact,
+                            "fix_hint": failure.fix_hint,
+                        }
+                        for failure in step.spawn_card.failures
+                    ],
+                }
+                if step.spawn_card is not None
+                else None
+            ),
+        }
+
+    @staticmethod
+    def _notification(
+        workflow_run_id: str,
+        placement_id: str,
+        kind: str,
+        severity: str,
+        message: str,
+    ) -> dict:
+        return {
+            "id": f"{workflow_run_id}:{placement_id}:{kind}",
+            "placement_id": placement_id,
+            "kind": kind,
+            "severity": severity,
+            "message": message,
+        }
+
+    def _emit_update(
+        self,
+        callback,
+        workflow: Workflow,
+        workflow_run_id: str,
+        status: WorkflowStatus,
+        *,
+        node_states: dict[str, dict],
+        notifications: list[dict],
+    ) -> None:
+        if callback is None:
+            return
+        callback(
+            {
+                "workflow_id": workflow.workflow_id,
+                "workflow_run_id": workflow_run_id,
+                "status": status.value,
+                "nodes": {
+                    placement_id: dict(payload)
+                    for placement_id, payload in node_states.items()
+                },
+                "notifications": [dict(item) for item in notifications],
+            }
         )
 
     def _entry_failures(self, node: Node) -> list[Violation]:

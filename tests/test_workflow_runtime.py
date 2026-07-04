@@ -194,6 +194,40 @@ def test_workflow_runtime_pauses_hitl_nodes_until_human_input(tmp_path):
     assert runner.calls == []
 
 
+def test_workflow_runtime_emits_live_state_updates(tmp_path):
+    _write_context_files(tmp_path)
+    runner = _WritingRunner(
+        tmp_path,
+        {
+            "node-001": (
+                "agents/artifacts/draft-output.md",
+                "---\n"
+                "title: Draft Output\n"
+                "---\n\n"
+                "## Summary\n"
+                "Ready for review.\n",
+            )
+        },
+    )
+    service = AgentService(tmp_path, runners={Tool.CLAUDE: runner, Tool.CODEX: runner})
+    workflow = _workflow_fixture(tmp_path, service, advance=AdvanceMode.ASK)
+    updates = []
+
+    result = asyncio.run(
+        WorkflowRuntime(tmp_path, service=service).run(
+            workflow,
+            prompts={"draft": "draft the artifact", "review": "review the artifact"},
+            on_update=updates.append,
+        )
+    )
+
+    assert result.status == WorkflowStatus.AWAITING_CONFIRM
+    assert [update["status"] for update in updates] == ["running", "awaiting_confirm"]
+    assert updates[0]["nodes"]["draft"]["status"] == "running"
+    assert updates[-1]["nodes"]["draft"]["status"] == "awaiting_confirm"
+    assert updates[-1]["notifications"][-1]["kind"] == "node_done_green"
+
+
 def _write_context_files(root):
     agents = root / "agents"
     (agents / "worker").mkdir(parents=True)

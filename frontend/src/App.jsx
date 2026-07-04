@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import CodeView from './components/CodeView.jsx'
 import RunAgent from './components/RunAgent.jsx'
 import Coordinator from './components/Coordinator.jsx'
+import WorkflowCanvas from './components/WorkflowCanvas.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import { onPush, whenReady, getState, hasBridge } from './api.js'
 import { MOCK } from './mock.js'
@@ -12,34 +13,56 @@ function AppInner() {
   const [view, setView] = useState('coordinator')
   const { addToast } = useToast()
   const seenViolations = useRef(new Set())
+  const seenWorkflowNotifications = useRef(new Set())
 
   useEffect(() => {
-    onPush((incoming) => {
-      setSnap(incoming)
-      // Surface new violations as toasts
-      const violations = incoming?.violations ?? []
-      for (const v of violations) {
-        const key = v.id || `${v.rule_id}-${v.artifact}`
-        if (seenViolations.current.has(key)) continue
-        seenViolations.current.add(key)
-        addToast({
-          id: key,
-          severity: v.severity || 'warning',
-          rule_id: v.rule_id,
-          issue_id: v.issue_id || null,
-          node_id: v.node_id || null,
-          message: v.message,
-        })
-      }
-    })
-    whenReady(async () => {
-      setLive(true)
-      const s = await getState()
-      if (s) setSnap(s)
-    })
+      onPush((incoming) => {
+        setSnap(incoming)
+        pushViolationToasts(incoming?.violations ?? [])
+        pushWorkflowToasts(incoming?.workflow_canvas?.notifications ?? [])
+      })
+      whenReady(async () => {
+        setLive(true)
+        const s = await getState()
+        if (s) {
+          setSnap(s)
+          pushViolationToasts(s.violations ?? [])
+          pushWorkflowToasts(s.workflow_canvas?.notifications ?? [])
+        }
+      })
     const t = setTimeout(() => { if (!hasBridge()) setSnap(MOCK) }, 500)
     return () => clearTimeout(t)
   }, [addToast])
+
+  function pushViolationToasts(violations) {
+    for (const v of violations) {
+      const key = v.id || `${v.rule_id}-${v.artifact}`
+      if (seenViolations.current.has(key)) continue
+      seenViolations.current.add(key)
+      addToast({
+        id: key,
+        severity: v.severity || 'warning',
+        rule_id: v.rule_id,
+        issue_id: v.issue_id || null,
+        node_id: v.node_id || null,
+        message: v.message,
+      })
+    }
+  }
+
+  function pushWorkflowToasts(notifications) {
+    for (const item of notifications) {
+      if (!item?.id || seenWorkflowNotifications.current.has(item.id)) continue
+      seenWorkflowNotifications.current.add(item.id)
+      addToast({
+        id: item.id,
+        severity: item.severity || 'info',
+        node_id: item.placement_id || null,
+        message: item.message,
+        allowCorrection: false,
+      })
+    }
+  }
 
   if (!snap) return <Splash />
 
@@ -58,7 +81,7 @@ function AppInner() {
           </div>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5 text-xs">
-              {['coordinator', 'code', 'agent'].map((v) => (
+              {['coordinator', 'canvas', 'code', 'agent'].map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -83,6 +106,8 @@ function AppInner() {
           <CodeView />
         ) : view === 'agent' ? (
           <RunAgent />
+        ) : view === 'canvas' ? (
+          <WorkflowCanvas workflowCanvas={snap.workflow_canvas} live={live} />
         ) : (
           <Coordinator />
         )}

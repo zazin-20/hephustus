@@ -59,20 +59,11 @@ class Workflow:
     version: int = 1
 
 
-def save_workflow(okf_root: Path, workflow: Workflow, *, suffix: str = ".yaml") -> Path:
-    _validate_workflow(workflow)
-    path = OKFLayout.for_existing_root(okf_root).workflow_path(workflow.workflow_id, suffix=suffix)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = _serialize_payload(asdict(workflow))
-    if path.suffix.lower() == ".json":
-        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    else:
-        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-    return path
+def workflow_to_dict(workflow: Workflow) -> dict:
+    return _serialize_payload(asdict(workflow))
 
 
-def load_workflow(path: Path) -> Workflow:
-    payload = _load_payload(path)
+def workflow_from_dict(payload: dict) -> Workflow:
     edges = [
         Edge(
             from_placement_id=item["from_placement_id"],
@@ -102,6 +93,38 @@ def load_workflow(path: Path) -> Workflow:
     )
     _validate_workflow(workflow)
     return workflow
+
+
+def save_workflow(okf_root: Path, workflow: Workflow, *, suffix: str = ".yaml") -> Path:
+    _validate_workflow(workflow)
+    path = OKFLayout.for_existing_root(okf_root).workflow_path(workflow.workflow_id, suffix=suffix)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = workflow_to_dict(workflow)
+    if path.suffix.lower() == ".json":
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    else:
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def load_workflow(path: Path) -> Workflow:
+    payload = _load_payload(path)
+    return workflow_from_dict(payload)
+
+
+def list_workflows(okf_root: Path) -> list[Workflow]:
+    workflows_dir = OKFLayout.for_existing_root(okf_root).workflows_dir
+    if not workflows_dir.exists():
+        return []
+    paths = sorted(
+        [
+            path
+            for path in workflows_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in {".yaml", ".yml", ".json"}
+        ],
+        key=lambda path: (path.stem.lower(), path.suffix.lower()),
+    )
+    return [load_workflow(path) for path in paths]
 
 
 def _load_payload(path: Path) -> dict:
