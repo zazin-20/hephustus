@@ -134,6 +134,14 @@ def iter_markers_from_trace(trace: Iterable[Any]) -> Iterable[Marker]:
             yield from iter_markers(command)
 
 
+def iter_trace_markers(trace: Iterable[Any]) -> Iterable[tuple[Any, Marker]]:
+    """Yield ``(trace_event, marker)`` tuples for protocol markers in trace commands."""
+    for event in trace:
+        for command in _iter_trace_command_strings(getattr(event, "raw", None)):
+            for marker in iter_markers(command):
+                yield event, marker
+
+
 def has_skill_completion(
     skill: str,
     *,

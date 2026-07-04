@@ -23,6 +23,7 @@ from hephaestus.integration.runners import (
     build_codex_argv,
 )
 from hephaestus.integration.service import AgentService, GovernanceViolationError, PreparedRun
+from hephaestus.store.corrections import list_corrections, promote_correction
 from hephaestus.store.db import connect
 from hephaestus.store.frozen_rules import upsert_frozen_rule
 from hephaestus.store.nodes import create_node
@@ -862,3 +863,77 @@ def test_node_context_is_clean_slate_with_layered_directives_and_same_node_repla
     assert "assistant: assistant: implement step one" in second
     assert "implement step one" not in third
     assert "assistant: assistant: implement step one" not in third
+
+
+def test_distillation_candidate_promotes_into_later_run_context(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "worker").mkdir(parents=True)
+    (agents / "worker" / "claude.md").write_text("WORKER DIRECTIVE", encoding="utf-8")
+    (agents / "worker" / "tdd.md").write_text("TDD PLAYBOOK", encoding="utf-8")
+    (agents / "architect" / "issues").mkdir(parents=True)
+    (agents / "architect" / "issues" / "issue-024.md").write_text("ISSUE TWENTY FOUR", encoding="utf-8")
+
+    captured: list[str] = []
+
+    class DistillingRunner:
+        tool = Tool.CODEX
+
+        async def run(self, contract, ctx):
+            captured.append(ctx.system_prompt)
+            if contract.prompt == "discover":
+                yield AgentEvent(
+                    "tool_call",
+                    "emit distillation marker",
+                    raw={
+                        "action": "shell",
+                        "input": {
+                            "command": '\n@@HEPHAESTUS@@ {"v":1,"type":"distillation_candidate","topic_key":"python-invocation","scope":"machine","directive":"Use the workspace venv interpreter for python invocations."}\n',
+                        },
+                    },
+                )
+            yield AgentEvent("text", f"assistant: {contract.prompt}")
+            yield AgentEvent("result", "done", raw={"actual_model": contract.model})
+
+    async def go():
+        runners = {Tool.CLAUDE: DistillingRunner(), Tool.CODEX: DistillingRunner()}
+        service = AgentService(tmp_path, runners=runners)
+        worker = create_node(
+            service.state_db_path,
+            tmp_path,
+            name="Worker",
+            provider="codex",
+            tags=["worker"],
+            rules=[],
+        )
+
+        async for _ in service.run(
+            service.task_for_node(node_id=worker.node_id, prompt="discover", issue_id="issue-024")
+        ):
+            pass
+
+        candidates = list_corrections(service.state_db_path, node_id=worker.node_id, issue_id="issue-024")
+        assert len(candidates) == 1
+        assert candidates[0].source_kind == "distillation_candidate"
+        assert candidates[0].topic_key == "python-invocation"
+        assert candidates[0].candidate_scope == "machine"
+        assert candidates[0].trace_event_id is not None
+        assert candidates[0].source_run_id is not None
+        assert candidates[0].source_node_id == worker.node_id
+
+        promote_correction(
+            service.state_db_path,
+            candidates[0].id,
+            confirmer="architect",
+            machine=str(tmp_path.resolve()),
+        )
+
+        async for _ in service.run(
+            service.task_for_node(node_id=worker.node_id, prompt="follow-up", issue_id="issue-024")
+        ):
+            pass
+
+    asyncio.run(go())
+
+    assert "Use the workspace venv interpreter for python invocations." not in captured[0]
+    assert "Use the workspace venv interpreter for python invocations." in captured[1]
+    assert "## machine:python-invocation" in captured[1]

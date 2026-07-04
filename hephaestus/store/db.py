@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # V2: drop FK on violations.run_id so governance violations can be recorded
 # without a matching run row (e.g. triggered by rule scan, not by a runner).
@@ -276,6 +276,64 @@ _SCHEMA_V4 = """
 ALTER TABLE nodes ADD COLUMN skill_obligations TEXT NOT NULL DEFAULT '[]';
 """
 
+_SCHEMA_V5 = """
+ALTER TABLE corrections ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'human_note';
+ALTER TABLE corrections ADD COLUMN topic_key TEXT;
+ALTER TABLE corrections ADD COLUMN candidate_scope TEXT;
+ALTER TABLE corrections ADD COLUMN candidate_shape TEXT;
+ALTER TABLE corrections ADD COLUMN trace_event_id TEXT;
+ALTER TABLE corrections ADD COLUMN source_run_id TEXT;
+ALTER TABLE corrections ADD COLUMN source_node_id TEXT;
+ALTER TABLE corrections ADD COLUMN status TEXT NOT NULL DEFAULT 'candidate';
+ALTER TABLE corrections ADD COLUMN confirmer TEXT;
+ALTER TABLE corrections ADD COLUMN confirmed_at TEXT;
+ALTER TABLE corrections ADD COLUMN promotion_scope TEXT;
+ALTER TABLE corrections ADD COLUMN promotion_kind TEXT;
+ALTER TABLE corrections ADD COLUMN frozen_rule_id TEXT;
+
+CREATE TABLE frozen_rules_v5 (
+  id                    TEXT PRIMARY KEY,
+  scope                 TEXT NOT NULL,
+  scope_key             TEXT NOT NULL,
+  topic_key             TEXT NOT NULL,
+  kind                  TEXT NOT NULL,
+  body                  TEXT NOT NULL,
+  node_id               TEXT,
+  workflow_id           TEXT,
+  placement_id          TEXT,
+  tag                   TEXT,
+  source_correction_id  TEXT,
+  source_trace_event_id TEXT,
+  source_run_id         TEXT,
+  source_node_id        TEXT,
+  confirmer             TEXT,
+  confirmed_at          TEXT,
+  disabled_at           TEXT,
+  superseded_by_rule_id TEXT,
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL
+);
+
+INSERT INTO frozen_rules_v5(
+  id, scope, scope_key, topic_key, kind, body, node_id, workflow_id,
+  placement_id, tag, source_correction_id, source_trace_event_id,
+  source_run_id, source_node_id, confirmer, confirmed_at, disabled_at,
+  superseded_by_rule_id, created_at, updated_at
+)
+SELECT
+  id, scope, scope_key, topic_key, kind, body, node_id, workflow_id,
+  placement_id, tag, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+  created_at, updated_at
+FROM frozen_rules;
+
+DROP TABLE frozen_rules;
+ALTER TABLE frozen_rules_v5 RENAME TO frozen_rules;
+
+CREATE UNIQUE INDEX idx_frozen_rules_active_topic
+ON frozen_rules(scope, scope_key, topic_key)
+WHERE disabled_at IS NULL;
+"""
+
 
 def dumps_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
@@ -325,6 +383,10 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         conn.executescript(_SCHEMA_V4)
         _set_schema_version(conn, 4)
         applied.append(4)
+    if current < 5:
+        conn.executescript(_SCHEMA_V5)
+        _set_schema_version(conn, 5)
+        applied.append(5)
 
     conn.commit()
     return applied

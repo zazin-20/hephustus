@@ -28,6 +28,7 @@ from hephaestus.integration.runners import (
 from hephaestus.integration.runners import _extract_target_path
 from hephaestus.rules.governance import ALL_GOVERNANCE_RULES
 from hephaestus.rules.registry import run_layer
+from hephaestus.store.corrections import capture_distillation_candidates
 from hephaestus.store.db import connect
 from hephaestus.store.nodes import Node, create_node, get_node
 from hephaestus.store.runs import create_run, finish_run, interrupt_running_runs
@@ -359,6 +360,11 @@ class AgentService:
                     status="error" if error_violations else "done",
                     usage=usage,
                     contract=final_contract.as_dict(),
+                )
+                capture_distillation_candidates(
+                    self.state_db_path,
+                    run_id=prepared.run_id,
+                    issue_id=contract.issue_id,
                 )
                 if error_violations:
                     raise GovernanceViolationError(error_violations)
