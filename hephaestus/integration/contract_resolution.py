@@ -33,7 +33,7 @@ def resolve(
 
     model = task.model or node.model
     effort = task.effort or node.effort
-    resolved_provider = (registry or provider_registry()).provider_for_model(model) or task.provider or node.provider
+    resolved_provider = (registry or provider_registry()).resolve_provider(model, task.provider, node.provider)
     if resolved_workflow_id and resolved_placement_id:
         scope = f"workflow:{resolved_workflow_id}/placement:{resolved_placement_id}"
     else:

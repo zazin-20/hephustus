@@ -116,7 +116,7 @@ class AgentService:
 
     def resolve(self, task: AgentTask, node: Node | None = None) -> tuple[Tool | str, SessionContext]:
         resolved = node or self._resolve_node(task)
-        provider = self.provider_registry.provider_for_model(task.model) or task.provider or resolved.provider
+        provider = self.provider_registry.resolve_provider(task.model, task.provider, resolved.provider)
         tool = _display_tool(provider)
         workflow_id = task.workflow_id or task.issue_id or None
         placement_id = task.placement_id or (resolved.node_id if workflow_id else None)
@@ -243,7 +243,7 @@ class AgentService:
 
     def begin(self, task: AgentTask) -> PreparedRun:
         node = self._resolve_node(task)
-        provider = self.provider_registry.provider_for_model(task.model) or task.provider or node.provider
+        provider = self.provider_registry.resolve_provider(task.model, task.provider, node.provider)
         tool = _display_tool(provider)
         workflow_id = task.workflow_id or task.issue_id or None
         workflow_run_id = task.workflow_run_id or uuid4().hex
@@ -373,7 +373,7 @@ class AgentService:
         if task.node_id:
             return get_node(self.state_db_path, task.node_id)
 
-        provider = self.provider_registry.provider_for_model(task.model) or task.provider
+        provider = self.provider_registry.resolve_provider(task.model, task.provider)
         if not provider:
             raise ValueError("provider is required when no node_id is supplied")
         name = " ".join(part.title() for part in (task.tags or [provider]))

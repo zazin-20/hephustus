@@ -93,6 +93,9 @@ class ProviderRegistry:
                 return provider.key
         return None
 
+    def resolve_provider(self, model: str | None, *fallbacks: str | None) -> str | None:
+        return self.provider_for_model(model) or next((fallback for fallback in fallbacks if fallback), None)
+
 
 def provider_key(value: object) -> str:
     if isinstance(value, str):

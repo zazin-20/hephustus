@@ -83,6 +83,14 @@ def test_fake_provider_can_register_and_drive_routing_and_catalog(tmp_path):
     assert any("echo:gemini_cli" in event.text for event in events)
 
 
+def test_resolve_provider_prefers_model_owner_then_first_truthy_fallback():
+    registry = build_provider_registry()
+
+    assert registry.resolve_provider("gpt-5.4", "claude") == "codex"
+    assert registry.resolve_provider("unknown-model", None, "", "claude", "codex") == "claude"
+    assert registry.resolve_provider("unknown-model", None, "") is None
+
+
 def test_provider_interface_owns_flags_and_event_normalization():
     registry = build_provider_registry()
 
