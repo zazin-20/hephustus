@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from enum import Enum
 import json
 from pathlib import Path
 
@@ -13,6 +14,16 @@ from hephaestus.okf_layout import OKFLayout
 
 class WorkflowValidationError(ValueError):
     """Raised when a workflow graph violates the authored workflow rules."""
+
+
+class AdvanceMode(str, Enum):
+    ALLOW = "allow"
+    ASK = "ask"
+
+
+class NodeInteractivity(str, Enum):
+    AFK = "afk"
+    HITL = "hitl"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +38,7 @@ class Placement:
     node_id: str
     x: int | float
     y: int | float
+    interactivity: NodeInteractivity = NodeInteractivity.AFK
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +48,7 @@ class Edge:
     to_placement_id: str
     to_input: str
     guard: Guard | None = None
+    advance: AdvanceMode = AdvanceMode.ALLOW
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +63,7 @@ def save_workflow(okf_root: Path, workflow: Workflow, *, suffix: str = ".yaml") 
     _validate_workflow(workflow)
     path = OKFLayout.for_existing_root(okf_root).workflow_path(workflow.workflow_id, suffix=suffix)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = asdict(workflow)
+    payload = _serialize_payload(asdict(workflow))
     if path.suffix.lower() == ".json":
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     else:
@@ -60,7 +73,6 @@ def save_workflow(okf_root: Path, workflow: Workflow, *, suffix: str = ".yaml") 
 
 def load_workflow(path: Path) -> Workflow:
     payload = _load_payload(path)
-    placements = [Placement(**item) for item in payload.get("placements", [])]
     edges = [
         Edge(
             from_placement_id=item["from_placement_id"],
@@ -68,8 +80,19 @@ def load_workflow(path: Path) -> Workflow:
             to_placement_id=item["to_placement_id"],
             to_input=item["to_input"],
             guard=Guard(**item["guard"]) if item.get("guard") is not None else None,
+            advance=AdvanceMode(item.get("advance", AdvanceMode.ALLOW)),
         )
         for item in payload.get("edges", [])
+    ]
+    placements = [
+        Placement(
+            placement_id=item["placement_id"],
+            node_id=item["node_id"],
+            x=item["x"],
+            y=item["y"],
+            interactivity=NodeInteractivity(item.get("interactivity", NodeInteractivity.AFK)),
+        )
+        for item in payload.get("placements", [])
     ]
     workflow = Workflow(
         workflow_id=payload["workflow_id"],
@@ -91,11 +114,24 @@ def _load_payload(path: Path) -> dict:
     return data
 
 
+def _serialize_payload(value):
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {key: _serialize_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_payload(item) for item in value]
+    return value
+
+
 def _validate_workflow(workflow: Workflow) -> None:
     placement_ids = {placement.placement_id for placement in workflow.placements}
     if len(placement_ids) != len(workflow.placements):
         raise WorkflowValidationError("workflow placements must have unique ids")
+    for placement in workflow.placements:
+        NodeInteractivity(placement.interactivity)
     for edge in workflow.edges:
+        AdvanceMode(edge.advance)
         if edge.from_placement_id not in placement_ids:
             raise WorkflowValidationError(
                 f"edge references unknown source placement: {edge.from_placement_id}"
