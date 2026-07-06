@@ -101,17 +101,7 @@ def create_node(
         context_policy=context_policy,
         created_at=created_at,
     )
-    write_card(
-        okf_root,
-        IdentityCard(
-            node_id=node.node_id,
-            name=node.name,
-            tags=node.tags,
-            created_at=node.created_at,
-            capabilities=default_capabilities(node.tags),
-            sessions=[],
-        ),
-    )
+    _write_identity_card(okf_root, node)
     return node
 
 
@@ -146,6 +136,92 @@ def get_node(db_path: Path, node_id: str) -> Node:
     if row is None:
         raise KeyError(node_id)
     return _row_to_node(row)
+
+
+def update_node(
+    db_path: Path,
+    node_id: str,
+    *,
+    okf_root: Path | None = None,
+    name: str,
+    provider: str,
+    tags: list[str],
+    rules: list[str],
+    model: str | None = None,
+    effort: str | None = None,
+    working_dir: str | None = None,
+    inputs: list[str] | None = None,
+    outputs: list[str] | None = None,
+    skills: list[str] | None = None,
+    skill_obligations: list[str] | None = None,
+    allowed_paths: list[str] | None = None,
+    allowed_tools: list[str] | None = None,
+    context_policy: str | None = None,
+) -> Node:
+    created_at = get_node(db_path, node_id).created_at
+
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE nodes
+            SET
+                name = ?,
+                provider = ?,
+                tags = ?,
+                rules = ?,
+                model = ?,
+                effort = ?,
+                working_dir = ?,
+                inputs = ?,
+                outputs = ?,
+                skills = ?,
+                skill_obligations = ?,
+                allowed_paths = ?,
+                allowed_tools = ?,
+                context_policy = ?
+            WHERE node_id = ?
+            """,
+            (
+                name,
+                provider,
+                dumps_json(tags),
+                dumps_json(rules),
+                model,
+                effort,
+                working_dir,
+                dumps_json(inputs or []),
+                dumps_json(outputs or []),
+                dumps_json(skills or []),
+                dumps_json(skill_obligations or []),
+                dumps_json(allowed_paths or []),
+                dumps_json(allowed_tools or []),
+                context_policy,
+                node_id,
+            ),
+        )
+        conn.commit()
+
+    node = Node(
+        node_id=node_id,
+        name=name,
+        provider=provider,
+        tags=list(tags),
+        rules=list(rules),
+        model=model,
+        effort=effort,
+        working_dir=working_dir,
+        inputs=list(inputs or []),
+        outputs=list(outputs or []),
+        skills=list(skills or []),
+        skill_obligations=list(skill_obligations or []),
+        allowed_paths=list(allowed_paths or []),
+        allowed_tools=list(allowed_tools or []),
+        context_policy=context_policy,
+        created_at=created_at,
+    )
+    if okf_root is not None:
+        _write_identity_card(okf_root, node)
+    return node
 
 
 def delete_node(db_path: Path, node_id: str, okf_root: Path | None = None) -> None:
@@ -209,6 +285,20 @@ def _row_to_node(row) -> Node:
         allowed_tools=loads_json(row[13]),
         context_policy=row[14],
         created_at=row[15],
+    )
+
+
+def _write_identity_card(okf_root: Path, node: Node) -> None:
+    write_card(
+        okf_root,
+        IdentityCard(
+            node_id=node.node_id,
+            name=node.name,
+            tags=node.tags,
+            created_at=node.created_at,
+            capabilities=default_capabilities(node.tags),
+            sessions=[],
+        ),
     )
 
 

@@ -24,6 +24,7 @@ from hephaestus.integration.turns import turn_payload
 from hephaestus.store.nodes import create_node as create_node_record
 from hephaestus.store.nodes import delete_node as delete_node_record
 from hephaestus.store.nodes import list_nodes as list_node_records
+from hephaestus.store.nodes import update_node as update_node_record
 from hephaestus.store.threads import list_threads as list_thread_records
 from hephaestus.store.threads import list_turns as list_turn_records
 from hephaestus.store.threads import set_included as set_turn_included_record
@@ -112,7 +113,7 @@ class Bridge:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         nodes = list_node_records(self._app._workspace.state_db_path)
-        return [{**asdict(node), "status": "idle"} for node in nodes]
+        return [self._node_payload(node) for node in nodes]
 
     def list_workflows(self) -> list[dict]:
         return [workflow_to_dict(workflow) for workflow in list_workflow_records(self._root)]
@@ -136,6 +137,13 @@ class Bridge:
         model=None,
         effort=None,
         working_dir=None,
+        inputs=None,
+        outputs=None,
+        skills=None,
+        skill_obligations=None,
+        allowed_paths=None,
+        allowed_tools=None,
+        context_policy=None,
     ) -> dict:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
@@ -149,14 +157,56 @@ class Bridge:
             model=model,
             effort=effort,
             working_dir=working_dir,
+            inputs=list(inputs or []),
+            outputs=list(outputs or []),
+            skills=list(skills or []),
+            skill_obligations=list(skill_obligations or []),
+            allowed_paths=list(allowed_paths or []),
+            allowed_tools=list(allowed_tools or []),
+            context_policy=context_policy,
         )
-        return {
-            "node_id": node.node_id,
-            "name": node.name,
-            "provider": node.provider,
-            "tags": node.tags,
-            "status": "idle",
-        }
+        return self._node_payload(node)
+
+    def update_node(
+        self,
+        node_id: str,
+        name: str,
+        provider: str,
+        tags: list,
+        rules: list,
+        model=None,
+        effort=None,
+        working_dir=None,
+        inputs=None,
+        outputs=None,
+        skills=None,
+        skill_obligations=None,
+        allowed_paths=None,
+        allowed_tools=None,
+        context_policy=None,
+    ) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        node = update_node_record(
+            self._app._workspace.state_db_path,
+            node_id,
+            okf_root=self._app._workspace.root,
+            name=name,
+            provider=provider,
+            tags=list(tags),
+            rules=list(rules),
+            model=model,
+            effort=effort,
+            working_dir=working_dir,
+            inputs=list(inputs or []),
+            outputs=list(outputs or []),
+            skills=list(skills or []),
+            skill_obligations=list(skill_obligations or []),
+            allowed_paths=list(allowed_paths or []),
+            allowed_tools=list(allowed_tools or []),
+            context_policy=context_policy,
+        )
+        return self._node_payload(node)
 
     def delete_node(self, node_id: str) -> None:
         if self._app is None:
@@ -257,6 +307,10 @@ class Bridge:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
         return self._app.start_agent(provider, tags, prompt, issue_id, cwd, model, effort)
+
+    @staticmethod
+    def _node_payload(node) -> dict:
+        return {**asdict(node), "status": "idle"}
 
 
 class DesktopApp:

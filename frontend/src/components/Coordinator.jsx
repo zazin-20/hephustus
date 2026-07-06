@@ -15,8 +15,10 @@ import {
   pickDirectory,
   sendMessage,
   setTurnIncluded,
+  updateNode,
 } from '../api.js'
 import { CATALOG_MOCK, COORDINATOR_MOCK, RULES_MOCK } from '../mock.js'
+import NodeForm from './NodeForm.jsx'
 
 const INPUT =
   'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
@@ -28,16 +30,6 @@ const PROVIDER_STYLE = {
 
 const STATUS_STYLE = {
   idle: 'bg-slate-500/15 text-slate-300 ring-white/10',
-}
-
-const EMPTY_FORM = {
-  name: '',
-  provider: 'claude',
-  tags_input: 'architect',
-  rules: [],
-  model: '',
-  effort: '',
-  working_dir: '',
 }
 
 function Field({ label, children }) {
@@ -127,7 +119,7 @@ export default function Coordinator() {
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [editingNode, setEditingNode] = useState(null)
   const [catalog, setCatalog] = useState(CATALOG_MOCK)
   const [ruleSet, setRuleSet] = useState(RULES_MOCK)
   const [busy, setBusy] = useState(false)
@@ -274,28 +266,8 @@ export default function Coordinator() {
     setTraceEvents(trace)
   }
 
-  function updateField(key, value) {
-    setForm((current) => ({ ...current, [key]: value }))
-  }
-
   function toggleTraceRow(id) {
     setOpenTrace((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
-  }
-
-  function toggleRule(ruleId) {
-    setForm((current) => {
-      const has = current.rules.includes(ruleId)
-      return {
-        ...current,
-        rules: has ? current.rules.filter((r) => r !== ruleId) : [...current.rules, ruleId],
-      }
-    })
-  }
-
-  async function browseDirectory() {
-    if (!hasBridge()) return
-    const chosen = await pickDirectory()
-    if (chosen) updateField('working_dir', chosen)
   }
 
   async function copyConversation() {
@@ -312,58 +284,98 @@ export default function Coordinator() {
     }
   }
 
-  function selectModel(model) {
-    setForm((current) => {
-      const picked = catalog.providers.flatMap((g) => g.models).find((m) => m.id === model)
-      const efforts = picked?.efforts || []
-      const effort = efforts.includes(current.effort) ? current.effort : ''
-      return { ...current, model, effort }
-    })
+  async function browseDirectory() {
+    if (!hasBridge()) return null
+    return await pickDirectory()
   }
 
-  async function submit(event) {
-    event.preventDefault()
-    if (!form.name.trim() || busy) return
+  function openCreateForm() {
+    setEditingNode(null)
+    setShowForm(true)
+    setError('')
+  }
 
+  function openEditForm(node) {
+    setEditingNode(node)
+    setShowForm(true)
+    setError('')
+  }
+
+  function closeForm() {
+    setEditingNode(null)
+    setShowForm(false)
+    setError('')
+  }
+
+  async function saveNode(payload) {
     setBusy(true)
     setError('')
-    const payload = {
-      name: form.name.trim(),
-      provider: form.provider,
-      tags: form.tags_input.split(',').map((tag) => tag.trim()).filter(Boolean),
-      rules: form.rules,
-      model: form.model || null,
-      effort: form.effort || null,
-      working_dir: form.working_dir.trim() || null,
-    }
 
     try {
       if (hasBridge()) {
-        const created = await createNode(
-          payload.name,
-          payload.provider,
-          payload.tags,
-          payload.rules,
-          payload.model,
-          payload.effort,
-          payload.working_dir,
-        )
+        const saved = editingNode
+          ? await updateNode(
+              editingNode.node_id,
+              payload.name,
+              payload.provider,
+              payload.tags,
+              payload.rules,
+              payload.model,
+              payload.effort,
+              payload.working_dir,
+              payload.inputs,
+              payload.outputs,
+              payload.skills,
+              payload.skill_obligations,
+              payload.allowed_paths,
+              payload.allowed_tools,
+              payload.context_policy,
+            )
+          : await createNode(
+              payload.name,
+              payload.provider,
+              payload.tags,
+              payload.rules,
+              payload.model,
+              payload.effort,
+              payload.working_dir,
+              payload.inputs,
+              payload.outputs,
+              payload.skills,
+              payload.skill_obligations,
+              payload.allowed_paths,
+              payload.allowed_tools,
+              payload.context_policy,
+            )
         await loadNodes()
-        setSelectedId(created?.node_id || null)
+        setSelectedId(saved?.node_id || null)
       } else {
-        const created = {
-          ...payload,
-          node_id: nextMockId(profiles),
-          created_at: new Date().toISOString(),
-          status: 'idle',
-        }
-        setProfiles((current) => [...current, created])
-        setSelectedId(created.node_id)
+        const saved = editingNode
+          ? {
+              ...editingNode,
+              ...payload,
+              node_id: editingNode.node_id,
+              created_at: editingNode.created_at,
+              status: editingNode.status || 'idle',
+            }
+          : {
+              ...payload,
+              node_id: nextMockId(profiles),
+              created_at: new Date().toISOString(),
+              status: 'idle',
+            }
+        setProfiles((current) =>
+          editingNode
+            ? current.map((profile) => (profile.node_id === saved.node_id ? saved : profile))
+            : [...current, saved],
+        )
+        setSelectedId(saved.node_id)
       }
-      setForm(EMPTY_FORM)
+      setEditingNode(null)
       setShowForm(false)
     } catch (err) {
-      setError(err?.message || 'Failed to create node.')
+      setError(err?.message || `Failed to ${editingNode ? 'update' : 'create'} node.`)
+      throw err
     } finally {
       setBusy(false)
     }
@@ -465,9 +477,6 @@ export default function Coordinator() {
     }
   }
 
-  const selectedModel = catalog.providers.flatMap((group) => group.models).find((m) => m.id === form.model)
-  const effortOptions = selectedModel ? selectedModel.efforts || [] : []
-
   // Flat conversation: user prompts + agent content (text/thinking/error) only.
   // Tool calls live in the Trace bucket; lifecycle envelopes (system/result) and
   // empty turns are dropped — they carry no content (the real reasoning is `thinking`).
@@ -512,11 +521,11 @@ export default function Coordinator() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void removeNode(profile.node_id)}
-                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-rose-500/30 hover:text-rose-300"
-                    aria-label={`Delete ${profile.name}`}
+                    onClick={() => openEditForm(profile)}
+                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-white/20 hover:text-slate-200"
+                    aria-label={`Edit ${profile.name}`}
                   >
-                    Delete
+                    Edit
                   </button>
                 </div>
 
@@ -525,6 +534,17 @@ export default function Coordinator() {
                   <TagPills tags={profile.tags} />
                   <StatusBadge status={profile.status || 'idle'} />
                 </div>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void removeNode(profile.node_id)}
+                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-rose-500/30 hover:text-rose-300"
+                    aria-label={`Delete ${profile.name}`}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -532,141 +552,21 @@ export default function Coordinator() {
 
         <div className="border-t border-white/5 p-3">
           {showForm ? (
-            <form onSubmit={submit} className="space-y-3 rounded-xl border border-white/5 bg-black/20 p-3">
-              <Field label="Name">
-                <input
-                  required
-                  value={form.name}
-                  onChange={(event) => updateField('name', event.target.value)}
-                  className={INPUT}
-                  placeholder="Agent name"
-                />
-              </Field>
-              <Field label="Provider">
-                <select
-                  value={form.provider}
-                  onChange={(event) => updateField('provider', event.target.value)}
-                  className={INPUT}
-                >
-                  {catalog.providers.map((group) => (
-                    <option key={group.provider} value={group.provider} className="bg-[#0b0e14]">
-                      {group.provider}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Tags">
-                <input
-                  value={form.tags_input}
-                  onChange={(event) => updateField('tags_input', event.target.value)}
-                  className={INPUT}
-                  placeholder="architect, design"
-                />
-              </Field>
-              <Field label="Rules">
-                <div className="flex flex-wrap gap-1.5">
-                  {ruleSet.map((rule) => {
-                    const on = form.rules.includes(rule.id)
-                    return (
-                      <button
-                        key={rule.id}
-                        type="button"
-                        onClick={() => toggleRule(rule.id)}
-                        title={rule.name}
-                        className={`rounded-full border px-2 py-0.5 font-mono text-[11px] transition ${
-                          on
-                            ? 'border-orange-400/40 bg-orange-500/15 text-orange-200'
-                            : 'border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-slate-200'
-                        }`}
-                      >
-                        {rule.id}
-                      </button>
-                    )
-                  })}
-                </div>
-              </Field>
-              <Field label="Model">
-                <select
-                  value={form.model}
-                  onChange={(event) => selectModel(event.target.value)}
-                  className={INPUT}
-                >
-                  <option value="" className="bg-[#0b0e14]">
-                    (provider default)
-                  </option>
-                  {catalog.providers.map((group) => (
-                    <optgroup key={group.provider} label={group.provider} className="bg-[#0b0e14]">
-                      {group.models.map((model) => (
-                        <option key={model.id} value={model.id} className="bg-[#0b0e14]">
-                          {model.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Effort">
-                <select
-                  value={form.effort}
-                  onChange={(event) => updateField('effort', event.target.value)}
-                  disabled={!form.model}
-                  className={`${INPUT} disabled:opacity-40`}
-                >
-                  <option value="" className="bg-[#0b0e14]">
-                    {form.model ? '(default)' : 'select a model first'}
-                  </option>
-                  {effortOptions.map((level) => (
-                    <option key={level} value={level} className="bg-[#0b0e14]">
-                      {level}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Working Directory">
-                <div className="flex gap-2">
-                  <input
-                    value={form.working_dir}
-                    onChange={(event) => updateField('working_dir', event.target.value)}
-                    className={INPUT}
-                    placeholder="path/to/repo"
-                  />
-                  {hasBridge() ? (
-                    <button
-                      type="button"
-                      onClick={() => void browseDirectory()}
-                      className="shrink-0 rounded-lg border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5"
-                    >
-                      Browse
-                    </button>
-                  ) : null}
-                </div>
-              </Field>
-              {error ? <div className="text-xs text-rose-300">{error}</div> : null}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={busy || !form.name.trim()}
-                  className="flex-1 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 px-3 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-40"
-                >
-                  {busy ? 'Saving...' : 'Create'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    setForm(EMPTY_FORM)
-                    setError('')
-                  }}
-                  className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+            <NodeForm
+              initialNode={editingNode}
+              catalog={catalog}
+              ruleSet={ruleSet}
+              live={hasBridge()}
+              onSubmit={saveNode}
+              onCancel={closeForm}
+              onPickDirectory={browseDirectory}
+              submitLabel={editingNode ? 'Save' : 'Create'}
+              title={editingNode ? `Edit ${editingNode.name}` : 'Create node'}
+            />
           ) : (
             <button
               type="button"
-              onClick={() => setShowForm(true)}
+              onClick={openCreateForm}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10"
             >
               Add Node

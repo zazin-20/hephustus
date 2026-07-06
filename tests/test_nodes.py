@@ -5,6 +5,7 @@ import json
 import pytest
 
 from hephaestus.okf_layout import OKFLayout
+from hephaestus.identity import default_capabilities
 from hephaestus.store.db import connect
 from hephaestus.store.runs import create_run
 from hephaestus.store.threads import append_turn, get_or_create_thread
@@ -13,6 +14,7 @@ from hephaestus.store.nodes import (
     delete_node,
     get_node,
     list_nodes,
+    update_node,
 )
 
 
@@ -146,6 +148,73 @@ def test_delete_node_accepts_agents_root_for_identity_cleanup(tmp_path):
     delete_node(db_path, created.node_id, tmp_path / "agents")
 
     assert not (tmp_path / "agents" / "identities" / f"{created.node_id}.json").exists()
+
+
+def test_update_node_updates_all_mutable_fields_and_syncs_identity_card(tmp_path):
+    db_path = make_db_path(tmp_path)
+    created = create_node(
+        db_path,
+        tmp_path,
+        name="Worker One",
+        provider="codex",
+        tags=["worker"],
+        rules=["S-001"],
+        model="gpt-5.4",
+        effort="medium",
+        working_dir="frontend",
+        inputs=["agents/specs/issue-028.md"],
+        outputs=["agents/handoffs/028.md"],
+        skills=["skill:tdd"],
+        skill_obligations=["skill:tdd"],
+        allowed_paths=["frontend/src"],
+        allowed_tools=["shell_command"],
+        context_policy="inputs-only",
+    )
+
+    updated = update_node(
+        db_path,
+        created.node_id,
+        okf_root=tmp_path,
+        name="Architect Review",
+        provider="claude",
+        tags=["architect", "review"],
+        rules=["S-002", "G-001"],
+        model="opus",
+        effort="high",
+        working_dir="agents/architect",
+        inputs=["agents/handoffs/028.md"],
+        outputs=["agents/qa/evidence/028.md"],
+        skills=["skill:grill-me"],
+        skill_obligations=["skill:grill-me"],
+        allowed_paths=["agents/architect"],
+        allowed_tools=["shell_command", "apply_patch"],
+        context_policy="reserved",
+    )
+
+    stored = get_node(db_path, created.node_id)
+    card_path = tmp_path / "agents" / "identities" / f"{created.node_id}.json"
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+
+    assert updated == stored
+    assert updated.node_id == created.node_id
+    assert updated.created_at == created.created_at
+    assert updated.name == "Architect Review"
+    assert updated.provider == "claude"
+    assert updated.tags == ["architect", "review"]
+    assert updated.rules == ["S-002", "G-001"]
+    assert updated.model == "opus"
+    assert updated.effort == "high"
+    assert updated.working_dir == "agents/architect"
+    assert updated.inputs == ["agents/handoffs/028.md"]
+    assert updated.outputs == ["agents/qa/evidence/028.md"]
+    assert updated.skills == ["skill:grill-me"]
+    assert updated.skill_obligations == ["skill:grill-me"]
+    assert updated.allowed_paths == ["agents/architect"]
+    assert updated.allowed_tools == ["shell_command", "apply_patch"]
+    assert updated.context_policy == "reserved"
+    assert card["name"] == "Architect Review"
+    assert card["tags"] == ["architect", "review"]
+    assert card["capabilities"] == default_capabilities(updated.tags)
 
 
 def test_optional_fields_default_to_none_or_empty(tmp_path):
