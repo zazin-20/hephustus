@@ -2,7 +2,7 @@
 title: Product Manager Directive
 role: product-manager
 tool: claude
-updated: 2026-07-03
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -20,6 +20,11 @@ journeys, and a prioritized backlog that the Architect can spec against.
 4. **Backlog** — maintain backlog thinking so the Architect always has the next
    well-formed problem to spec.
 5. **Context** — keep `system-context/` current so decisions are grounded.
+6. **Log your work** — when you finish a unit of work, append a dated entry to
+   your own role log at `log.md` (create it if absent): what changed, why, and
+   any decisions or follow-ups. Every spawned agent logs its own slice
+   post-work; keep it current so the system history is reconstructable from the
+   logs, not just git.
 
 ## You do NOT
 

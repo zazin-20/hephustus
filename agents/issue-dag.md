@@ -64,6 +64,32 @@ A third architecture-pass finding (context-accumulation) was investigated and
 keyed by workflow-run), and the only open part (long-thread compaction) is
 already owned by the deferred Headroom compression seam.
 
+## ADR-0003 reconciliation + node-authoring — ready to file
+
+```text
+ADR-0001  SUPERSEDED by ADR-0003 (graph is an executable gatekeeper runtime)
+ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
+  |
+  -> [node-authoring]  DRAFT spec, not yet filed  (INDEPENDENT — ready now)
+```
+
+- **ADR-0003** (`docs/adr/0003-node-graph-is-an-executable-gatekeeper-runtime.md`)
+  supersedes ADR-0001: the node graph is the executable gatekeeper runtime, not a
+  planning-only surface; the `Start/Agent/Condition/…` typed-node set is
+  reconciled to the shipped uniform `Node` + `Placement` + `Edge` + `Guard` +
+  AFK/HITL + ask/allow model. ADR-0001 retained verbatim with a superseded banner
+  (honest history). Docs only — no code touched.
+- **[node-authoring]** — draft spec at
+  `agents/architect/issues/DRAFT-node-authoring.md` (pending user approval to open
+  on GitHub). Widens `Bridge.create_node` + `api.js` to the full `Node` contract,
+  adds a `store/nodes.py::update_node` DAL fn + `Bridge.update_node`, and adds a
+  create/**edit** UI form for `inputs, outputs, skills, skill_obligations,
+  allowed_paths, allowed_tools`. `context_policy` is plumbed but held inert (no
+  runtime consumer until compression lands). **INDEPENDENT** — does NOT depend on
+  dynamic fan-out or the deferred compression/Headroom seam; builds only on merged
+  work (#18/#20/#23/#25) and is dispatchable immediately once filed. One dedicated
+  owner per the ownership rule below.
+
 ## Held for Human
 
 - None currently. (`#25` was held-for-human by default but human-authorized
@@ -84,8 +110,10 @@ Checked `2026-07-04`:
 
 - `#1`-`#27` — all **closed**, all merged to `main`.
 
-No open, dispatchable work remains. The pipeline is idle until new issues are
-filed. Candidate follow-ups exist from the 2026-07-04 architecture pass
+No GitHub issues are open yet. The **node-authoring** work above has a drafted
+spec ready to file (`agents/architect/issues/DRAFT-node-authoring.md`), pending
+user approval to open it on GitHub — it is dispatchable the moment it is filed.
+Additional candidate follow-ups exist from the 2026-07-04 architecture pass
 (frontend Coordinator.jsx god-component, dead evaluate_spawn, unclosed DB
 connections, dual marker-parser, stale root architecture.md, the 4 other
 pending-ADR decisions from governance-engine-revised.md §8) — none filed yet.

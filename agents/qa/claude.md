@@ -2,7 +2,7 @@
 title: QA Directive
 role: qa
 tool: claude
-updated: 2026-07-04
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -26,6 +26,11 @@ its issue spec, and you produce the evidence that lets it be logged as done.
 4. **Bugs** — file failures under `bug-report/`.
 5. **Tests** — own `tests/{security,integration,e2e}/`, `playwright/`, and
    `manual_test_snapshots/`.
+6. **Log your work** — when you finish verifying, append a dated entry to your
+   own role log at `log.md` (create it if absent): what you verified, the
+   result, and the evidence path. This is separate from the per-issue evidence
+   file — the evidence is the artifact, the log is your own post-work record.
+   Every spawned agent logs its own slice.
 
 ## You do NOT
 

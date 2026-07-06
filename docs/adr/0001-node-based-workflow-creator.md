@@ -1,8 +1,19 @@
 # ADR-0001: Node-Based Workflow Creator for Coordinator Pipelines
 
-**Status:** Proposed  
-**Date:** 2026-06-23  
-**Owner:** architect  
+**Status:** Superseded by [ADR-0003](0003-node-graph-is-an-executable-gatekeeper-runtime.md) (2026-07-05)
+**Date:** 2026-06-23
+**Owner:** architect
+
+> **Superseded — read ADR-0003 for the accepted decision.** This ADR's core
+> decision (the node graph is *"a planning and authoring surface, NOT a new
+> runtime engine"*, and *"make the graph the runtime engine"* is rejected) was
+> **reversed** by the code that subsequently shipped. `hephaestus/workflow_runtime.py`
+> is an executable gatekeeper engine that runs the graph node-by-node under
+> Hephaestus's gates, and the typed node set below (`Start/Agent/Condition/…`)
+> was replaced by a uniform `Node` + `Placement` + `Edge` + `Guard` model with
+> AFK/HITL interactivity and ask/allow advance. The text below is retained
+> verbatim as honest history of the original stance and why it was rejected;
+> ADR-0003 records the reversal, the reasoning, and the vocabulary reconciliation.
 
 ## Context
 

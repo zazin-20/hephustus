@@ -2,7 +2,7 @@
 title: Worker Directive
 role: worker
 tool: codex
-updated: 2026-07-04
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -33,6 +33,11 @@ time, via TDD, and you do not invent scope. You run on Codex (via codex-cc).
    (`hephaestus/okf_layout.py`); leaving the handoff is a process convention
    (the former rule `S-002` that enforced it was removed 2026-06-23). The
    Architect reviews before QA.
+5. **Log your work** — after you finish, append a dated entry to your own role
+   log at `log.md` (create it if absent): what you built, key decisions, and the
+   test count. This is separate from the handoff — the handoff hands work
+   forward; the log is your own post-work record. Every spawned agent logs its
+   own slice. Commit it with your work.
 
 ## You do NOT
 

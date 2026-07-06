@@ -1,6 +1,6 @@
 ---
 title: Architect Log
-updated: 2026-07-04
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -136,6 +136,65 @@ references in `agents/qa/test-plan.md` (line 143 "rule S-003 consumer", line 373
 `governance-engine-revised.md` duplicate.
 
 Documentation only — no `.py` touched.
+
+---
+
+## 2026-07-05 — ADR-0001 reconciled (→ADR-0003) + node-authoring spec drafted
+
+Two Architect tasks routed by the Orchestrator (2026-07-05 vision-vs-code
+verification). Docs + spec only; no `.py`/frontend edits, no commits, no GitHub
+issue created.
+
+**Task 1 — ADR-0001 reconciled to the shipped gatekeeper runtime.** Grounded in
+`hephaestus/workflow_runtime.py` (`WorkflowRuntime.run` is a real gatekeeper
+engine: topo-walk from start placements, entry gate `WF-ENTRY-001`, exit gates
+`WF-OUT-*`/`WF-SKILL-*` via `evaluate_spawn_gate`, HITL/AFK, ask/allow confirm,
+override, live `on_update` state) and `hephaestus/workflows.py` (uniform `Node` +
+`Placement` + `Edge` + `Guard` + `NodeInteractivity` + `AdvanceMode`; guarded
+cycles allowed). ADR-0001 was still "Proposed" and decided the graph is "a
+planning surface, NOT a runtime engine," rejecting "make the graph the runtime
+engine" — a direct contradiction with the shipped code.
+- **Form chosen: supersede, not rewrite.** Wrote
+  `docs/adr/0003-node-graph-is-an-executable-gatekeeper-runtime.md` (Accepted)
+  recording the reversal, the reasoning (the runtime *is* the compliance layer),
+  and a full vocabulary-reconciliation table mapping ADR-0001's seven typed nodes
+  (`Start/Agent/Condition/Handoff/QA/Notify/End`) onto the structural model
+  (Start=no in-edge, End=no out-edge, Agent=the uniform Node, Condition=guarded
+  Edge, Handoff=Edge+HandoffMarker, QA=exit gate, Notify=runtime notifications) +
+  the two runtime dimensions ADR-0001 omitted (AFK/HITL, ask/allow). Chose
+  supersede over in-place rewrite to keep honest history (ADRs are append-only;
+  matches ADR-0002's precedent). Added a superseded banner atop ADR-0001, body
+  retained verbatim.
+
+**Task 2 — node-authoring spec drafted (spec only, not implemented).** Verified:
+`store/nodes.py::create_node` + `store/db.py` already carry the full contract
+(inputs/outputs/skills/skill_obligations/allowed_paths/allowed_tools/context_policy),
+but `store/nodes.py` has **no `update_node`** (edit path needs a new DAL fn);
+`Bridge.create_node` (~L130) and `api.js::createNode` (~L117) both cap at 7 stub
+fields; `WorkflowCanvas.jsx` only places existing nodes (no authoring form).
+- Wrote `agents/architect/issues/DRAFT-node-authoring.md` (marked DRAFT — pending
+  user approval to open on GitHub) with `## What to build` / `## Acceptance
+  criteria` / `## Blocked by`. Scope: add `update_node` DAL fn; widen
+  `Bridge.create_node` + add `Bridge.update_node`; widen/extend `api.js`; add a
+  create/**edit** UI form for the six list-typed guardrail fields.
+- **`context_policy` recommendation: hold the active control, plumb the field
+  inert.** It has no runtime consumer (compression deferred behind the Headroom
+  seam) and — critically — its value vocabulary is undefined until that adapter
+  defines it. So plumb it through the bridge/api (data plane symmetric, no later
+  migration) but render the UI control disabled/read-only with a "reserved — no
+  runtime effect until compression lands" label, to avoid authoring
+  un-interpretable values ahead of the consumer.
+- **DAG:** added an "ADR-0003 + node-authoring" section to `agents/issue-dag.md`;
+  marked ADR-0001 superseded, ADR-0003 accepted, and the node-authoring spec as
+  **INDEPENDENT / ready now** — explicitly not blocked by dynamic fan-out or
+  compression; builds only on merged #18/#20/#23/#25. One dedicated owner when filed.
+
+**Open questions / follow-ups for the Orchestrator/user:**
+- Approve opening `DRAFT-node-authoring.md` as a GitHub issue (gated on user
+  confirmation) — then it is immediately dispatchable to a Worker.
+- The node-authoring issue necessarily touches `store/nodes.py` (new `update_node`)
+  — the "one owner may only edit files for that issue" rule applies; no shared-file
+  contention expected since no open issue touches nodes.py.
 
 ---
 

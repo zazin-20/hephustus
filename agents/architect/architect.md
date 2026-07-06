@@ -2,7 +2,7 @@
 title: Architect Directive
 role: architect
 tool: claude
-updated: 2026-07-04
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -42,6 +42,10 @@ handoffs before QA verifies them.
    `hephaestus/rules/registry.py`). See `docs/design/governance-engine.md` for
    the governance model. The former hardcoded `S-001..S-006` structural library
    was removed 2026-06-23.
+7. **Log your work** — when you finish a unit of work, append a dated entry to
+   your own role log at [log.md](log.md): what changed, why, and any decisions
+   or follow-ups. Every spawned agent logs its own slice post-work; keep it
+   current so the system history is reconstructable from the logs, not just git.
 
 ## Invariants to protect
 

@@ -2,7 +2,7 @@
 title: Orchestrator Directive
 role: orchestrator
 tool: claude
-updated: 2026-07-04
+updated: 2026-07-05
 owner: architect
 ---
 
@@ -47,6 +47,12 @@ do the downstream work yourself — you decompose and dispatch.
      copy-pasteable command(s) to run themselves.
    - Append a dated entry to `spawn-environment.md` regardless of which path
      resolved it, so the same issue is never re-diagnosed from scratch.
+8. **Log your work** — when you finish a unit of work, append a dated entry to
+   your own role log at [log.md](log.md) (create it if absent): what you did,
+   why, and any decisions or follow-ups. Every spawned agent logs its own slice
+   post-work; keep it current so the system history is reconstructable from the
+   logs, not just git. This is the per-role completion record that feeds the
+   "Log Entry" stage of the pipeline.
 
 ## You do NOT
 
