@@ -240,3 +240,80 @@ def test_bridge_run_workflow_forwards_to_app():
 
     assert app.calls == [("issue-025", {"draft": "ship it"})]
     assert result == {"workflow_id": "issue-025", "status": "running"}
+
+
+def test_bridge_create_update_and_list_nodes_round_trip_full_contract(tmp_path):
+    from hephaestus.desktop import DesktopApp
+
+    app = DesktopApp(tmp_path)
+
+    created = app._bridge.create_node(
+        "Node Author",
+        "codex",
+        ["worker", "frontend"],
+        ["S-001"],
+        "gpt-5.4",
+        "medium",
+        "frontend",
+    )
+
+    assert created == {
+        "node_id": "node-001",
+        "name": "Node Author",
+        "provider": "codex",
+        "tags": ["worker", "frontend"],
+        "rules": ["S-001"],
+        "model": "gpt-5.4",
+        "effort": "medium",
+        "working_dir": "frontend",
+        "inputs": [],
+        "outputs": [],
+        "skills": [],
+        "skill_obligations": [],
+        "allowed_paths": [],
+        "allowed_tools": [],
+        "context_policy": None,
+        "created_at": created["created_at"],
+        "status": "idle",
+    }
+
+    updated = app._bridge.update_node(
+        created["node_id"],
+        name="Node Editor",
+        provider="claude",
+        tags=["architect"],
+        rules=["S-002", "G-001"],
+        model="opus",
+        effort="high",
+        working_dir="agents/architect",
+        inputs=["agents/specs/028.md"],
+        outputs=["agents/handoffs/028.md"],
+        skills=["skill:grill-me"],
+        skill_obligations=["skill:grill-me"],
+        allowed_paths=["agents/architect"],
+        allowed_tools=["shell_command", "apply_patch"],
+        context_policy="reserved",
+    )
+
+    listed = app._bridge.list_nodes()
+
+    assert updated == {
+        "node_id": created["node_id"],
+        "name": "Node Editor",
+        "provider": "claude",
+        "tags": ["architect"],
+        "rules": ["S-002", "G-001"],
+        "model": "opus",
+        "effort": "high",
+        "working_dir": "agents/architect",
+        "inputs": ["agents/specs/028.md"],
+        "outputs": ["agents/handoffs/028.md"],
+        "skills": ["skill:grill-me"],
+        "skill_obligations": ["skill:grill-me"],
+        "allowed_paths": ["agents/architect"],
+        "allowed_tools": ["shell_command", "apply_patch"],
+        "context_policy": "reserved",
+        "created_at": created["created_at"],
+        "status": "idle",
+    }
+    assert listed == [updated]

@@ -219,3 +219,39 @@ Left untouched: `log.md` (repo root) line ~31 `spec/rules/structural.md` — ins
 dated historical entry, accurate as point-in-time history. Remaining
 `rules/structural.md`/`spec/rules/structural.md` strings now live only in dated
 history. Documentation only — no `.py` touched.
+
+---
+
+## 2026-07-07 — Handoff review: #28 node authoring (APPROVE → QA)
+
+Reviewed the Codex Worker's handoff for issue **#28** ("full Node contract
+authorable + editable from the UI"), commit `4e76fc7` on
+`feat/028-node-authoring`. **Verdict: APPROVE, ready for QA.** Full per-criterion
+findings recorded in `handoffs/028.md` under `## Architect review`.
+
+Walked all acceptance criteria against the diff:
+- **DAL `update_node`** (`store/nodes.py`) — updates all mutable fields,
+  preserves `node_id`/`created_at`, returns the `Node`, syncs the identity card
+  via a new shared `_write_identity_card` helper (same capability derivation as
+  create). Existing DAL functions unaffected.
+- **Bridge** (`desktop.py`) — `create_node` forwards the 7 previously-dropped
+  fields and returns the full payload via `_node_payload`; `update_node` added
+  and round-trips (unit test present).
+- **api.js** — `createNode` widened, `updateNode` added, both behind the
+  bridge-presence guard.
+- **UI** — old inline form extracted into shared `NodeForm.jsx` (list editors for
+  the six list fields) and wired into both the coordinator roster and canvas
+  palette; edit pre-fills; list refreshes after save.
+- **`context_policy`** — plumbed but rendered `disabled/readOnly` with the
+  reserved label; no free-form value accepted.
+- **Key risk — Coordinator refactor** — verified NOT dropped behavior: roster
+  list, `removeNode`/Delete (`:384`/`:541`), `loadNodes` (`:219`), model+effort
+  selection, rule toggle, and directory browse all survived, relocated into
+  `NodeForm`. New Edit button added.
+- **Regressions** — test changes additive only; state.db still DAL-only; product
+  code untouched outside the four intended surfaces.
+
+One non-blocking latent note: `update_node` rewrites the identity card with
+`sessions=[]` (mirrors create); harmless today since `append_session` has no live
+producer. Out-of-scope untracked `sample/agents/identities/` left for the
+Orchestrator (Worker sandbox blocked removal; not staged in `4e76fc7`).

@@ -114,7 +114,22 @@ export async function listNodes() {
   return null
 }
 
-export async function createNode(name, provider, tags, rules, model, effort, workingDir) {
+export async function createNode(
+  name,
+  provider,
+  tags,
+  rules,
+  model,
+  effort,
+  workingDir,
+  inputs = [],
+  outputs = [],
+  skills = [],
+  skillObligations = [],
+  allowedPaths = [],
+  allowedTools = [],
+  contextPolicy = null,
+) {
   if (window.pywebview?.api?.create_node) {
     return await window.pywebview.api.create_node(
       name,
@@ -124,6 +139,52 @@ export async function createNode(name, provider, tags, rules, model, effort, wor
       model || null,
       effort || null,
       workingDir || null,
+      inputs,
+      outputs,
+      skills,
+      skillObligations,
+      allowedPaths,
+      allowedTools,
+      contextPolicy || null,
+    )
+  }
+  return null
+}
+
+export async function updateNode(
+  nodeId,
+  name,
+  provider,
+  tags,
+  rules,
+  model,
+  effort,
+  workingDir,
+  inputs = [],
+  outputs = [],
+  skills = [],
+  skillObligations = [],
+  allowedPaths = [],
+  allowedTools = [],
+  contextPolicy = null,
+) {
+  if (window.pywebview?.api?.update_node) {
+    return await window.pywebview.api.update_node(
+      nodeId,
+      name,
+      provider,
+      tags,
+      rules,
+      model || null,
+      effort || null,
+      workingDir || null,
+      inputs,
+      outputs,
+      skills,
+      skillObligations,
+      allowedPaths,
+      allowedTools,
+      contextPolicy || null,
     )
   }
   return null

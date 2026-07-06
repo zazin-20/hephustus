@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { hasBridge, runWorkflow, saveWorkflow } from '../api.js'
+import {
+  createNode,
+  getCatalog,
+  hasBridge,
+  listNodes,
+  listRules,
+  pickDirectory,
+  runWorkflow,
+  saveWorkflow,
+  updateNode,
+} from '../api.js'
+import { CATALOG_MOCK, RULES_MOCK } from '../mock.js'
+import NodeForm from './NodeForm.jsx'
 import { useToast } from './Toast.jsx'
 
 const PANEL = 'rounded-2xl border border-white/5 bg-white/[0.02]'
@@ -107,6 +119,38 @@ function providerTone(executor) {
   return PROVIDER_STYLE[executor.provider] || 'border-violet-500/30 bg-violet-500/10 text-violet-200 shadow-violet-950/30'
 }
 
+function executorForNode(node) {
+  if (!node) return { kind: 'engine', provider: 'unknown', model: null, effort: null }
+  if (node.provider === 'builtin' || node.tags?.includes('builtin')) {
+    return { kind: 'builtin', name: (node.name || 'builtin').toLowerCase() }
+  }
+  return {
+    kind: 'engine',
+    provider: node.provider,
+    model: node.model ?? null,
+    effort: node.effort ?? null,
+  }
+}
+
+function normalizeAvailableNode(node) {
+  return {
+    ...node,
+    model: node.model ?? null,
+    effort: node.effort ?? null,
+    tags: [...(node.tags ?? [])],
+    rules: [...(node.rules ?? [])],
+    inputs: [...(node.inputs ?? [])],
+    outputs: [...(node.outputs ?? [])],
+    skills: [...(node.skills ?? [])],
+    skill_obligations: [...(node.skill_obligations ?? [])],
+    allowed_paths: [...(node.allowed_paths ?? [])],
+    allowed_tools: [...(node.allowed_tools ?? [])],
+    working_dir: node.working_dir ?? null,
+    context_policy: node.context_policy ?? '',
+    executor: node.executor ?? executorForNode(node),
+  }
+}
+
 function gateTone(status) {
   if (status === 'pass') return 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
   if (status === 'fail') return 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
@@ -209,7 +253,13 @@ function GraphCanvas({ workflow, mode, selectedPlacementId, onSelectPlacement, o
 
 export default function WorkflowCanvas({ workflowCanvas, live }) {
   const { addToast } = useToast()
-  const availableNodes = workflowCanvas?.available_nodes ?? []
+  const [availableNodes, setAvailableNodes] = useState(
+    () => (workflowCanvas?.available_nodes ?? []).map(normalizeAvailableNode),
+  )
+  const [catalog, setCatalog] = useState(CATALOG_MOCK)
+  const [ruleSet, setRuleSet] = useState(RULES_MOCK)
+  const [showNodeForm, setShowNodeForm] = useState(false)
+  const [editingNode, setEditingNode] = useState(null)
   const incomingWorkflows = useMemo(
     () => (workflowCanvas?.workflows ?? []).map(normalizeWorkflow).filter(Boolean),
     [workflowCanvas],
@@ -230,6 +280,20 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
   })
   const [prompts, setPrompts] = useState({})
   const dragState = useRef(null)
+
+  useEffect(() => {
+    if (live && hasBridge()) return
+    setAvailableNodes((workflowCanvas?.available_nodes ?? []).map(normalizeAvailableNode))
+  }, [workflowCanvas, live])
+
+  useEffect(() => {
+    if (!live || !hasBridge()) return
+    void refreshAvailableNodes()
+    void Promise.all([getCatalog(), listRules()]).then(([nextCatalog, nextRules]) => {
+      if (nextCatalog) setCatalog(nextCatalog)
+      if (nextRules) setRuleSet(nextRules)
+    })
+  }, [live])
 
   useEffect(() => {
     setWorkflows(incomingWorkflows)
@@ -309,6 +373,117 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
   }, [])
 
   const selectedPlacement = workflow?.placements.find((placement) => placement.placement_id === selectedPlacementId) ?? null
+
+  function syncWorkflowNodes(nodes) {
+    const nodesById = Object.fromEntries(nodes.map((node) => [node.node_id, node]))
+    setWorkflows((current) =>
+      current.map((item) => ({
+        ...item,
+        placements: item.placements.map((placement) => {
+          const node = nodesById[placement.node_id]
+          return node
+            ? {
+                ...placement,
+                name: node.name,
+                executor: node.executor,
+              }
+            : placement
+        }),
+      })),
+    )
+  }
+
+  async function refreshAvailableNodes() {
+    if (!hasBridge()) return
+    const rows = (await listNodes()) || []
+    const normalized = rows.map(normalizeAvailableNode)
+    setAvailableNodes(normalized)
+    syncWorkflowNodes(normalized)
+  }
+
+  async function browseDirectory() {
+    if (!hasBridge()) return null
+    return await pickDirectory()
+  }
+
+  function openCreateNodeForm() {
+    setEditingNode(null)
+    setShowNodeForm(true)
+  }
+
+  function openEditNodeForm(node) {
+    setEditingNode(node)
+    setShowNodeForm(true)
+  }
+
+  function closeNodeForm() {
+    setEditingNode(null)
+    setShowNodeForm(false)
+  }
+
+  async function saveNode(payload) {
+    if (hasBridge()) {
+      const saved = editingNode
+        ? await updateNode(
+            editingNode.node_id,
+            payload.name,
+            payload.provider,
+            payload.tags,
+            payload.rules,
+            payload.model,
+            payload.effort,
+            payload.working_dir,
+            payload.inputs,
+            payload.outputs,
+            payload.skills,
+            payload.skill_obligations,
+            payload.allowed_paths,
+            payload.allowed_tools,
+            payload.context_policy,
+          )
+        : await createNode(
+            payload.name,
+            payload.provider,
+            payload.tags,
+            payload.rules,
+            payload.model,
+            payload.effort,
+            payload.working_dir,
+            payload.inputs,
+            payload.outputs,
+            payload.skills,
+            payload.skill_obligations,
+            payload.allowed_paths,
+            payload.allowed_tools,
+            payload.context_policy,
+          )
+      await refreshAvailableNodes()
+      closeNodeForm()
+      return saved
+    }
+
+    const saved = normalizeAvailableNode(
+      editingNode
+        ? {
+            ...editingNode,
+            ...payload,
+            node_id: editingNode.node_id,
+            executor: executorForNode({ ...editingNode, ...payload }),
+          }
+        : {
+            ...payload,
+            node_id: `node-${String(availableNodes.length + 1).padStart(3, '0')}`,
+            executor: executorForNode(payload),
+          },
+    )
+    const nextNodes = editingNode
+      ? availableNodes.map((node) => (node.node_id === saved.node_id ? saved : node))
+      : [...availableNodes, saved]
+    setAvailableNodes(nextNodes)
+    syncWorkflowNodes(nextNodes)
+    closeNodeForm()
+    return saved
+  }
 
   function updateWorkflow(mutator) {
     if (!workflow) return
@@ -532,26 +707,60 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
         {mode === 'author' ? (
           <>
             <div className="space-y-2">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Node palette</div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Node palette</div>
+                <button
+                  type="button"
+                  onClick={openCreateNodeForm}
+                  className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/5"
+                >
+                  New node
+                </button>
+              </div>
               <div className="space-y-2">
                 {availableNodes.map((node) => (
-                  <button
+                  <div
                     key={node.node_id}
-                    type="button"
-                    onClick={() => addPlacement(node)}
-                    className={`w-full rounded-xl border px-3 py-3 text-left ${providerTone(node.executor)}`}
+                    className={`rounded-xl border px-3 py-3 ${providerTone(node.executor)}`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-slate-100">{node.name}</span>
-                      <span className="font-mono text-[11px] text-slate-400">{node.node_id}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addPlacement(node)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className="block truncate text-sm font-semibold text-slate-100">{node.name}</span>
+                        <span className="mt-1 block font-mono text-[11px] text-slate-400">{node.node_id}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditNodeForm(node)}
+                        className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/5"
+                      >
+                        Edit
+                      </button>
                     </div>
                     <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-400">
                       {executorLabel(node.executor)}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
+
+            {showNodeForm && (
+              <NodeForm
+                initialNode={editingNode}
+                catalog={catalog}
+                ruleSet={ruleSet}
+                live={hasBridge()}
+                onSubmit={saveNode}
+                onCancel={closeNodeForm}
+                onPickDirectory={browseDirectory}
+                submitLabel={editingNode ? 'Save' : 'Create'}
+                title={editingNode ? `Edit ${editingNode.name}` : 'Create node'}
+              />
+            )}
 
             <div className="space-y-3 rounded-xl border border-white/5 bg-black/20 p-3">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Wire edge</div>
