@@ -1,7 +1,7 @@
 ---
 task: T-node-authoring
 role: architect
-status: architect-approved
+status: completed
 created: 2026-07-05
 owner: orchestrator
 ---
@@ -14,7 +14,12 @@ has **no `update_node`** — the edit path needs a new DAL fn, not just UI.
 compression lands. **Issue opened 2026-07-07 as
 [#28](https://github.com/zazin-20/hephustus/issues/28); dispatched to one Codex
 Worker** in worktree `.claude/worktrees/issue-028-node-authoring` on branch
-`feat/028-node-authoring`. Task stays open until built + QA'd.
+`feat/028-node-authoring`. **DONE 2026-07-07** — Worker implemented (213 backend
+tests, +2; vite build green), Architect handoff review APPROVED, merged to main
+as `91a222e` (impl `4e76fc7`), pushed, issue #28 closed. QA dispatch was skipped
+per explicit user direction to merge. Carry-forward (non-blocking): `update_node`
+resets identity-card `sessions=[]` on edit — revisit when session recording is
+wired to a runtime path.
 
 # Task: Complete node authoring — make the full Node contract authorable from the UI
 

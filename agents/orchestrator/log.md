@@ -162,3 +162,29 @@ Handoff `reviewed_by: architect` now reflects a real approval + a
 
 **Next:** QA verification. Still not merged / not pushed / issue open — gated on
 user confirm.
+
+---
+
+## 2026-07-07 — #28 merged, pushed, closed (QA skipped per user direction)
+
+User directed merge/push/close directly (QA dispatch skipped — their call; the
+Architect approval stood as the gate). Sequence:
+1. Committed the session's docs pile to main (`adb4fab`) — required first because
+   `agents/architect/log.md` was uncommitted on main AND changed on the branch
+   (a merge would otherwise refuse).
+2. Merged `feat/028-node-authoring` → main `--no-ff` (`91a222e`);
+   `architect/log.md` auto-merged clean (both entries preserved).
+3. Full suite on merged main: **213 passed**.
+4. `git push origin main` (`3f81686..91a222e`); `gh issue close 28` with the
+   closeout summary (per responsibility #6).
+`T-node-authoring` → completed, moved to `tasks/completed/`. `sample/agents/
+identities/` deliberately left untracked (present in main too; not ours to
+delete without a nod).
+
+**Then:** ran a features-vs-vision alignment pass at user request (see the
+report handed back this turn). Headline: the node-as-governed-provider spine +
+authoring + gatekeeper execution are aligned and shipped; the two known
+deltas are the deferred **dynamic fan-out** (static placements) and
+**context compression** (`context_policy` plumbed but inert), plus an
+authoring-UX gap — artifact-spec predicate files and frozen-rule constitution
+layers are file/DAL-authored, not yet UI-authorable.
