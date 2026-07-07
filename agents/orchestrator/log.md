@@ -188,3 +188,42 @@ deltas are the deferred **dynamic fan-out** (static placements) and
 **context compression** (`context_policy` plumbed but inert), plus an
 authoring-UX gap — artifact-spec predicate files and frozen-rule constitution
 layers are file/DAL-authored, not yet UI-authorable.
+
+---
+
+## 2026-07-07 — Artifact-authoring: PM → grill → #29 opened + Worker dispatched
+
+User picked the artifact-spec-authoring path from the alignment report. Flow:
+PM framed the three open decisions (`product-manager/todo/artifact-spec-authoring.md`)
+→ Architect ran a grill (grill-me) to resolve them → authored
+`issues/DRAFT-artifact-authoring.md` + DAG-placed. Key grill outcome: the runtime
+ALREADY injects the spec into the producing node (`context.py:187`) and checks it
+(`WF-OUT-*`), so v1 = authoring UI + thin index + id-resolution, no engine change;
+storage = folder-of-md + thin `artifact_id → path` index (not relational).
+
+On user approval: opened [#29](https://github.com/zazin-20/hephustus/issues/29),
+committed the docs pile to main (`a850c72`, pushed), pre-created worktree
+`.claude/worktrees/issue-029-artifact-authoring` (branch `feat/029-artifact-authoring`
+off `a850c72`), dispatched one `codex:codex-rescue` Worker with a spawn-env-built
+brief (absolute paths, venv python, named-surface scope cap, TDD, handoff at
+`architect/handoffs/029.md`, no close/merge/push). Task: `tasks/T-artifact-authoring.md`.
+Running in background; will find the codex PID once the forwarder returns and watch
+it → verify → Architect review.
+
+---
+
+## 2026-07-07 — #29 landed: verified, Architect-approved, merged, pushed, closed
+
+Worker finished all three layers, left handoff, did not commit (sandbox 6a) —
+Orchestrator verified + committed `d833d4a`. Backend **216 passed** (213→216, +3);
+`vite build` green (52 modules). Architect handoff review **APPROVED** (`0eb566e`):
+all 7 criteria pass, `Coordinator.jsx` +364 confirmed additive (node roster intact,
+Artifacts layered via a `catalogMode` tab), id-resolution fallback test-proven, no
+gating change. Non-blocking: `min_items` string-coercion future-hardening; `sample/
+agents/identities/` leftover (uncommitted).
+
+Merge sequence (user directed verify → merge → push): committed the #29 tracking
+docs to main, merged `feat/029-artifact-authoring` --no-ff, ran full suite on merged
+main, pushed origin, closed #29. `T-artifact-authoring` → completed. The
+artifact-spec-authoring **authoring-UX gap** from the alignment report is now closed
+at the artifact layer; the constitution layer remains file/DAL-authored (open).
