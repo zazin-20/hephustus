@@ -330,3 +330,19 @@ One non-blocking latent note: `update_node` rewrites the identity card with
 `sessions=[]` (mirrors create); harmless today since `append_session` has no live
 producer. Out-of-scope untracked `sample/agents/identities/` left for the
 Orchestrator (Worker sandbox blocked removal; not staged in `4e76fc7`).
+
+## 2026-07-07 — Handoff review: #30 Coordinator rehome (APPROVE)
+
+- Reviewed Codex Worker's commit `9575b14` on `feat/030-coordinator-rehome`
+  (retire `Coordinator.jsx`; rehome into `Library.jsx` + `Console.jsx`).
+- Verdict **APPROVE — ready to merge**. Read both new files in full and
+  cross-checked every capability cluster of the deleted 1111-line Coordinator:
+  all present (per-capability checklist in `handoffs/030.md`). No drops.
+- Confirmed no scope creep: `NodeForm`/`ArtifactForm` reused (not duplicated),
+  `ArtifactBindingEditor` reached transitively via `NodeForm`; `api.js` and
+  `NodeForm.jsx` edits are cosmetic-only (comment text + one copy string), the
+  #349733c `RULE_LABELS` work intact; `mock.js` `COORDINATOR_MOCK` split into
+  `NODES_MOCK`/`ARTIFACTS_MOCK` consistent with Library; product diff entirely
+  under `frontend/src/**` — nothing in `hephaestus/**` or tests.
+- Set `reviewed_by: architect` on `handoffs/030.md`. Did not run the build
+  (Orchestrator already confirmed green, 53 modules).
