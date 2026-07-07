@@ -4,6 +4,15 @@ import ArtifactBindingEditor from './ArtifactBindingEditor.jsx'
 const INPUT =
   'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
 
+// Human-readable labels for the runtime governance rules. The G-00x id stays
+// visible as a small tag (violations reference it) but the plain-language label
+// leads, so a workflow author understands what each guardrail enforces.
+const RULE_LABELS = {
+  'G-001': 'Path scope',
+  'G-002': 'Model lock',
+  'G-003': 'Skill proof',
+}
+
 function Field({ label, children, note = null }) {
   return (
     <label className="block">
@@ -231,7 +240,7 @@ export default function NodeForm({
         />
       </Field>
 
-      <Field label="Rules">
+      <Field label="Rules" note="Runtime guardrails enforced against this node's authored config.">
         <div className="flex flex-wrap gap-1.5">
           {ruleSet.map((rule) => {
             const active = form.rules.includes(rule.id)
@@ -240,14 +249,15 @@ export default function NodeForm({
                 key={rule.id}
                 type="button"
                 onClick={() => toggleRule(rule.id)}
-                title={rule.name}
-                className={`rounded-full border px-2 py-0.5 font-mono text-[11px] transition ${
+                title={`${rule.id} — ${rule.name}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] transition ${
                   active
                     ? 'border-orange-400/40 bg-orange-500/15 text-orange-200'
                     : 'border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-slate-200'
                 }`}
               >
-                {rule.id}
+                {RULE_LABELS[rule.id] || rule.name}
+                <span className="font-mono text-[10px] opacity-50">{rule.id}</span>
               </button>
             )
           })}
