@@ -64,13 +64,15 @@ A third architecture-pass finding (context-accumulation) was investigated and
 keyed by workflow-run), and the only open part (long-thread compaction) is
 already owned by the deferred Headroom compression seam.
 
-## ADR-0003 reconciliation + node-authoring — ready to file
+## ADR-0003 reconciliation + node-authoring (#28 DONE) + artifact-authoring
 
 ```text
 ADR-0001  SUPERSEDED by ADR-0003 (graph is an executable gatekeeper runtime)
 ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
   |
-  -> [node-authoring]  DRAFT spec, not yet filed  (INDEPENDENT — ready now)
+  -> #28  DONE  Node authoring (full Node contract authorable + editable)
+       |
+       -> #29  OPEN  Artifact authoring (author + connect to a node)  (INDEPENDENT)
 ```
 
 - **ADR-0003** (`docs/adr/0003-node-graph-is-an-executable-gatekeeper-runtime.md`)
@@ -79,16 +81,26 @@ ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
   reconciled to the shipped uniform `Node` + `Placement` + `Edge` + `Guard` +
   AFK/HITL + ask/allow model. ADR-0001 retained verbatim with a superseded banner
   (honest history). Docs only — no code touched.
-- **[node-authoring]** — draft spec at
-  `agents/architect/issues/DRAFT-node-authoring.md` (pending user approval to open
-  on GitHub). Widens `Bridge.create_node` + `api.js` to the full `Node` contract,
-  adds a `store/nodes.py::update_node` DAL fn + `Bridge.update_node`, and adds a
-  create/**edit** UI form for `inputs, outputs, skills, skill_obligations,
-  allowed_paths, allowed_tools`. `context_policy` is plumbed but held inert (no
-  runtime consumer until compression lands). **INDEPENDENT** — does NOT depend on
-  dynamic fan-out or the deferred compression/Headroom seam; builds only on merged
-  work (#18/#20/#23/#25) and is dispatchable immediately once filed. One dedicated
-  owner per the ownership rule below.
+- **#28 node-authoring — DONE.** Merged to `main` at `91a222e` (impl `4e76fc7`,
+  Architect review `1624a21`), pushed, issue closed 2026-07-07. Widened
+  `Bridge.create_node` + `api.js` to the full `Node` contract, added
+  `store/nodes.py::update_node` + `Bridge.update_node`, and a create/edit UI form
+  (`NodeForm.jsx`) for `inputs, outputs, skills, skill_obligations, allowed_paths,
+  allowed_tools`. `context_policy` plumbed but held read-only. 213 backend tests
+  (+2), vite build green.
+- **[artifact-authoring]** — draft spec at
+  `agents/architect/issues/DRAFT-artifact-authoring.md` (pending user approval to
+  open on GitHub). Makes the **artifact definition** authorable + bindable to a
+  node: adds `store/artifacts.py` (thin `artifact_id → path` index), an
+  `okf_layout.artifacts_dir()` home, a `create/edit Artifact` UI + catalog, and an
+  id-resolution seam so node `outputs`/`inputs` bind by artifact id (backward-
+  compatible with #28's literal paths). **No runtime gating change** — `context.py`
+  injection + `WF-OUT-*` check already do both halves of the loop. v1 acceptance:
+  *author an artifact and connect it to a node*; richer predicates (`matches`/
+  `has_field`), live preview, and external sanity-checkers are deferred fast-
+  follows. **INDEPENDENT** — builds only on merged work (#28 + the artifact-spec
+  engine); dispatchable the moment it is filed. Grill record:
+  `product-manager/todo/artifact-spec-authoring.md`. One dedicated owner.
 
 ## Held for Human
 
@@ -106,13 +118,14 @@ ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
 
 ## Live GitHub Snapshot
 
-Checked `2026-07-04`:
+Checked `2026-07-07`:
 
-- `#1`-`#27` — all **closed**, all merged to `main`.
+- `#1`-`#28` — all **closed**, all merged to `main` (#28 merged `91a222e`,
+  pushed + closed 2026-07-07).
 
-No GitHub issues are open yet. The **node-authoring** work above has a drafted
-spec ready to file (`agents/architect/issues/DRAFT-node-authoring.md`), pending
-user approval to open it on GitHub — it is dispatchable the moment it is filed.
+No GitHub issues are open. The **artifact-authoring** work above has a drafted
+spec ready to file (`agents/architect/issues/DRAFT-artifact-authoring.md`),
+pending user approval to open it on GitHub — dispatchable the moment it is filed.
 Additional candidate follow-ups exist from the 2026-07-04 architecture pass
 (frontend Coordinator.jsx god-component, dead evaluate_spawn, unclosed DB
 connections, dual marker-parser, stale root architecture.md, the 4 other

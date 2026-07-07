@@ -12,6 +12,31 @@ changes that are narrower than the system-level rollup in
 
 ---
 
+## 2026-07-07 — Artifact-authoring: grill + DRAFT spec (follow-on to #28)
+
+Ran a grill (grill-me) on the PM's three open decisions for artifact-spec
+authoring (`product-manager/todo/artifact-spec-authoring.md`). Resolved:
+(1) **storage** = folder-of-markdown source of truth + thin `store/artifacts.py`
+index (`artifact_id → path`), node binds by id, backward-compatible with #28
+literal paths — NOT relational content (user wants md for agent-readability, git
+diffs, future sphinx-style external checkers); (2) **v1 checks** = required
+headings (`has_section`/`non_empty`) + `min_items`, defer `matches`/`has_field`;
+(3) **live preview** deferred.
+
+**Load-bearing finding:** the runtime already does both halves of the loop —
+`integration/context.py` (~L187) injects the output spec into the *producing*
+node's context, and `WF-OUT-*` already runs `check_artifact` on exit. So v1 is
+authoring UI + thin index + an id-resolution seam — **no gatekeeper/context
+change**. This shrank the scope materially.
+
+**v1 acceptance:** *can the user author an artifact and connect it to a node.*
+Spec authored → `issues/DRAFT-artifact-authoring.md`; DAG-placed (INDEPENDENT,
+ready-now, builds on merged #28 + artifact-spec engine). Awaiting user approval
+to open the GitHub issue → dispatch one Worker (mirrors the #28 flow). No product
+code, no issue filed, no dispatch yet.
+
+---
+
 ## 2026-07-03 — Workspace restructure
 
 Architect artifacts consolidated under `agents/architect/`:
