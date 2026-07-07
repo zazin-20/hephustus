@@ -12,6 +12,37 @@ changes that are narrower than the system-level rollup in
 
 ---
 
+## 2026-07-07 — Handoff review: #29 artifact authoring → APPROVE
+
+Reviewed the Codex Worker's handoff for #29 (commit `d833d4a`, branch
+`feat/029-artifact-authoring`) before QA/merge. Verdict **APPROVE — ready to
+merge**; set `reviewed_by: architect` on `handoffs/029.md`.
+
+Walked all seven acceptance criteria; every one passes. Load-bearing checks:
+- **DAL is a thin index, file is source of truth** — `store/artifacts.py`
+  composes the spec markdown and writes `agents/artifacts/<id>.md`; the DB row
+  is `{artifact_id, name, path, tags, created_at}` only. Every write calls
+  `load_artifact_spec()` (author-time parse guard), and `test_artifacts.py`
+  asserts the composed `## Predicates` parse to the expected labels — a real,
+  non-skipped assertion.
+- **id-resolution seam is backward-compatible** — `context.py::_resolve_declared_path`
+  and `workflow_runtime.py::_resolve_path` try artifact-id first, fall back to
+  literal path on `KeyError`; `test_integration.py` proves #28 literal paths
+  still resolve.
+- **No gating change** — `WF-OUT-*` and context injection untouched; the diffs
+  add id→path resolution only.
+- **Key risk `Coordinator.jsx` (+364) is additive** — the #28 node roster
+  (list/create/edit/delete, full node payload, threads/conversation/trace) is
+  intact; artifacts are layered on via a `catalogMode` tab with parallel state.
+  Nothing dropped.
+
+Non-blocking: untracked `sample/agents/identities/` is out of scope (Worker
+sandbox blocked removing it); minor `min_items` string-coercion hardening noted
+as a fast-follow. Committed the handoff + this log entry only; did not touch
+product code, merge, push, or close.
+
+---
+
 ## 2026-07-07 — Artifact-authoring: grill + DRAFT spec (follow-on to #28)
 
 Ran a grill (grill-me) on the PM's three open decisions for artifact-spec
