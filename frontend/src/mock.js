@@ -256,7 +256,7 @@ export const RULES_MOCK = [
   { id: 'G-002', name: 'Run must use the contracted model', severity: 'error', fix_hint: '' },
 ]
 
-export const COORDINATOR_MOCK = [
+export const NODES_MOCK = [
   {
     node_id: 'node-001',
     name: 'Systems Architect',
@@ -292,5 +292,36 @@ export const COORDINATOR_MOCK = [
     working_dir: 'tests',
     created_at: '2026-06-22T00:08:00Z',
     status: 'idle',
+  },
+]
+
+export const ARTIFACTS_MOCK = [
+  {
+    artifact_id: 'artifact-001',
+    name: 'Implementation Handoff',
+    path: 'agents/architect/handoffs/030.md',
+    tags: ['handoff', 'architect'],
+    headings: [
+      { heading: 'Summary', required: true, min_items: 1 },
+      { heading: 'Verification', required: true, min_items: 1 },
+    ],
+    good_looks_like: 'Lists changed files, confirms moved capabilities, and summarizes verification evidence.',
+    antipatterns: 'Missing file list, vague capability statements, or no verification notes.',
+    examples: '- Files added: Library.jsx, Console.jsx\n- Console keeps transcript copy and trace intact.',
+    created_at: '2026-07-07T00:00:00Z',
+  },
+  {
+    artifact_id: 'artifact-002',
+    name: 'QA Evidence',
+    path: 'agents/qa/evidence/030.md',
+    tags: ['qa', 'evidence'],
+    headings: [
+      { heading: 'Build', required: true, min_items: 1 },
+      { heading: 'Scope Check', required: true, min_items: 1 },
+    ],
+    good_looks_like: 'Captures build status, screenshots or notes, and confirms only intended frontend files changed.',
+    antipatterns: 'No build result, no scope validation, or backend assertions for a frontend-only issue.',
+    examples: '- Build: `npm --prefix frontend run build` passed\n- Scope: `git diff --name-only` stayed under `frontend/src/**`',
+    created_at: '2026-07-07T00:00:00Z',
   },
 ]

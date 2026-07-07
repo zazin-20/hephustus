@@ -203,7 +203,7 @@ export default function NodeForm({
       <div>
         <div className="text-sm font-semibold text-slate-100">{title}</div>
         <div className="text-xs text-slate-500">
-          Full node contract authoring for the desktop coordinator.
+          Full node contract authoring for the desktop app.
         </div>
       </div>
 
