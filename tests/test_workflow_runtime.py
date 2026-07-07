@@ -4,6 +4,7 @@ import asyncio
 
 from hephaestus.integration.runners import AgentEvent
 from hephaestus.integration.service import AgentService
+from hephaestus.store.artifacts import ArtifactHeading, create_artifact
 from hephaestus.store.nodes import create_node
 from hephaestus.store.runs import get_run
 from hephaestus.workflow_runtime import AdvanceMode, NodeInteractivity, WorkflowRuntime, WorkflowStatus
@@ -225,6 +226,81 @@ def test_workflow_runtime_emits_live_state_updates(tmp_path):
     assert updates[0]["nodes"]["draft"]["status"] == "running"
     assert updates[-1]["nodes"]["draft"]["status"] == "awaiting_confirm"
     assert updates[-1]["notifications"][-1]["kind"] == "node_done_green"
+
+
+def test_workflow_runtime_resolves_output_artifact_bindings_by_artifact_id(tmp_path):
+    _write_context_files(tmp_path)
+    runner = _WritingRunner(
+        tmp_path,
+        {
+            "node-001": (
+                "agents/artifacts/draft-output.md",
+                "---\n"
+                "title: Draft Output\n"
+                "---\n\n"
+                "## Summary\n"
+                "Ready for review.\n",
+            )
+        },
+    )
+    service = AgentService(tmp_path, runners={"claude": runner, "codex": runner})
+    artifact = create_artifact(
+        service.state_db_path,
+        name="Draft Spec",
+        tags=["workflow"],
+        headings=[ArtifactHeading(heading="Summary", required=True, min_items=None)],
+        good_looks_like="A complete draft summary.",
+        antipatterns="Missing summary.",
+        examples="- Include the review-ready summary.",
+    )
+    draft = create_node(
+        service.state_db_path,
+        tmp_path,
+        name="Draft",
+        provider="codex",
+        tags=["worker"],
+        rules=[],
+        model="gpt-5.4",
+        inputs=["agents/artifacts/issue-023.md"],
+        outputs=[artifact.artifact_id],
+    )
+    review = create_node(
+        service.state_db_path,
+        tmp_path,
+        name="Review",
+        provider="codex",
+        tags=["worker"],
+        rules=[],
+        model="gpt-5.4",
+        inputs=["agents/artifacts/draft-output.md"],
+        outputs=[],
+    )
+    workflow = Workflow(
+        workflow_id="issue-023",
+        placements=[
+            Placement(placement_id="draft", node_id=draft.node_id, x=0, y=0, interactivity=NodeInteractivity.AFK),
+            Placement(placement_id="review", node_id=review.node_id, x=1, y=0, interactivity=NodeInteractivity.AFK),
+        ],
+        edges=[
+            Edge(
+                from_placement_id="draft",
+                from_output="agents/artifacts/draft-output.md",
+                to_placement_id="review",
+                to_input="agents/artifacts/draft-output.md",
+                advance=AdvanceMode.ALLOW,
+            )
+        ],
+    )
+
+    result = asyncio.run(
+        WorkflowRuntime(tmp_path, service=service).run(
+            workflow,
+            prompts={"draft": "draft the artifact", "review": "review the artifact"},
+        )
+    )
+
+    assert result.status == WorkflowStatus.DONE
+    assert [step.status for step in result.steps] == [WorkflowStatus.DONE, WorkflowStatus.DONE]
 
 
 def _write_context_files(root):

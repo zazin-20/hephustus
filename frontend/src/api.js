@@ -114,6 +114,62 @@ export async function listNodes() {
   return null
 }
 
+export async function listArtifacts() {
+  if (window.pywebview?.api?.list_artifacts) return await window.pywebview.api.list_artifacts()
+  return null
+}
+
+export async function createArtifact(
+  name,
+  headings = [],
+  tags = [],
+  goodLooksLike = '',
+  antipatterns = '',
+  examples = '',
+) {
+  if (window.pywebview?.api?.create_artifact) {
+    return await window.pywebview.api.create_artifact(
+      name,
+      headings,
+      tags,
+      goodLooksLike,
+      antipatterns,
+      examples,
+    )
+  }
+  return null
+}
+
+export async function updateArtifact(
+  artifactId,
+  name,
+  headings = [],
+  tags = [],
+  goodLooksLike = '',
+  antipatterns = '',
+  examples = '',
+) {
+  if (window.pywebview?.api?.update_artifact) {
+    return await window.pywebview.api.update_artifact(
+      artifactId,
+      name,
+      headings,
+      tags,
+      goodLooksLike,
+      antipatterns,
+      examples,
+    )
+  }
+  return null
+}
+
+export async function deleteArtifact(artifactId) {
+  if (window.pywebview?.api?.delete_artifact) {
+    return await window.pywebview.api.delete_artifact(artifactId)
+  }
+  return null
+}
+
 export async function createNode(
   name,
   provider,

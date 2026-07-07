@@ -24,6 +24,7 @@ from hephaestus.integration.runners import (
 )
 from hephaestus.integration.service import AgentService, GovernanceViolationError, PreparedRun
 from hephaestus.store.corrections import list_corrections, promote_correction
+from hephaestus.store.artifacts import ArtifactHeading, create_artifact
 from hephaestus.store.db import connect
 from hephaestus.store.frozen_rules import upsert_frozen_rule
 from hephaestus.store.nodes import create_node
@@ -126,6 +127,45 @@ def test_context_reports_missing_skill_playbooks(tmp_path):
     )
 
     assert any(path.name == "grill-me.md" for path in ctx.missing)
+
+
+def test_context_artifact_id_resolution_falls_back_to_literal_path(tmp_path):
+    agents = tmp_path / "agents"
+    (agents / "worker").mkdir(parents=True)
+    (agents / "worker" / "claude.md").write_text("WORKER DIRECTIVE", encoding="utf-8")
+    (agents / "worker" / "tdd.md").write_text("TDD PLAYBOOK", encoding="utf-8")
+    (agents / "specs").mkdir(parents=True)
+    (agents / "specs" / "literal-spec.md").write_text(
+        "---\n"
+        "title: Literal Spec\n"
+        "---\n\n"
+        "## Predicates\n"
+        "- has_summary()\n\n"
+        "## Good Looks Like\n"
+        "A complete summary.\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / ".hephaestus" / "state.db"
+    create_artifact(
+        db_path,
+        name="Bound Spec",
+        tags=[],
+        headings=[ArtifactHeading(heading="Summary", required=True, min_items=None)],
+        good_looks_like="Use the artifact id when available.",
+        antipatterns="",
+        examples="",
+    )
+
+    ctx = build_session_context(
+        tmp_path,
+        node_id="node-001",
+        tags=["worker"],
+        outputs=["missing-artifact-id", "agents/specs/literal-spec.md"],
+        db_path=db_path,
+    )
+
+    assert any(path == tmp_path / "agents" / "specs" / "literal-spec.md" for path in ctx.files)
+    assert any(path == tmp_path / "agents" / "missing-artifact-id" for path in ctx.missing)
 
 
 def test_codex_event_parses_real_schema():

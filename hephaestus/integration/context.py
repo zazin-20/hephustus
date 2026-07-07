@@ -8,6 +8,7 @@ from hephaestus.integration.routing import TAG_DIRECTIVE
 from hephaestus.skills import resolve_skill_refs
 from hephaestus.integration.turns import describe_turn
 from hephaestus.okf_layout import OKFLayout
+from hephaestus.store.artifacts import get_artifact
 from hephaestus.store.frozen_rules import ScopeAddress, list_frozen_rules_for_address
 from hephaestus.store.threads import compile_context
 
@@ -24,7 +25,23 @@ class SessionContext:
     system_prompt: str
 
 
-def _resolve_declared_path(layout: OKFLayout, declared: str) -> Path:
+def _resolve_declared_path(
+    layout: OKFLayout,
+    declared: str,
+    *,
+    db_path: str | Path | None = None,
+) -> Path:
+    if db_path is not None:
+        try:
+            artifact = get_artifact(db_path, declared)
+        except KeyError:
+            pass
+        else:
+            return _resolve_declared_path(layout, artifact.path)
+    return _resolve_literal_path(layout, declared)
+
+
+def _resolve_literal_path(layout: OKFLayout, declared: str) -> Path:
     path = Path(declared)
     if path.is_absolute():
         return path
@@ -35,6 +52,7 @@ def _resolve_declared_path(layout: OKFLayout, declared: str) -> Path:
 
 def _candidate_paths(
     layout: OKFLayout,
+    db_path: str | Path | None,
     tags: list[str],
     issue_id: str | None,
     skills: list[str],
@@ -50,11 +68,11 @@ def _candidate_paths(
         constitution_paths.append(layout.worker_tdd_path())
 
     skill_paths = [skill.path for skill in resolve_skill_refs(layout, skills)]
-    input_paths = [_resolve_declared_path(layout, declared) for declared in inputs]
+    input_paths = [_resolve_declared_path(layout, declared, db_path=db_path) for declared in inputs]
     if issue_id and _ISSUE_CONSUMER_TAGS.intersection(tags):
         input_paths.append(layout.issue_path(issue_id))
 
-    spec_paths = [_resolve_declared_path(layout, declared) for declared in outputs]
+    spec_paths = [_resolve_declared_path(layout, declared, db_path=db_path) for declared in outputs]
     return constitution_paths, skill_paths, input_paths, spec_paths
 
 
@@ -155,6 +173,7 @@ def build_session_context(
 
     constitution_candidates, skill_candidates, input_candidates, spec_candidates = _candidate_paths(
         layout,
+        db_path,
         tags,
         issue_id,
         list(skills or []),
