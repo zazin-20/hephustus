@@ -1,1 +1,7 @@
 .hephaestus/
+
+# Generated node identity cards — regenerated from state.db on run.
+# Keep node-001.json only, as the tracked fixture the QA bridge read-only
+# test reads (agents/qa/tests/integration/test_bridge_readonly.py).
+agents/identities/*
+!agents/identities/node-001.json

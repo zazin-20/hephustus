@@ -1,0 +1,13 @@
+{
+  "node_id": "node-001",
+  "name": "Architect",
+  "tags": [
+    "architect"
+  ],
+  "created_at": "2026-07-04T01:54:49Z",
+  "capabilities": [
+    "write_spec",
+    "write_handoff"
+  ],
+  "sessions": []
+}
