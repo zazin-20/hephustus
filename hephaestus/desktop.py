@@ -21,6 +21,11 @@ from hephaestus.codeview import CodeViewer
 from hephaestus.dashboard import snapshot
 from hephaestus.integration import AgentService
 from hephaestus.integration.turns import turn_payload
+from hephaestus.store.artifacts import ArtifactHeading
+from hephaestus.store.artifacts import create_artifact as create_artifact_record
+from hephaestus.store.artifacts import delete_artifact as delete_artifact_record
+from hephaestus.store.artifacts import list_artifacts as list_artifact_records
+from hephaestus.store.artifacts import update_artifact as update_artifact_record
 from hephaestus.store.nodes import create_node as create_node_record
 from hephaestus.store.nodes import delete_node as delete_node_record
 from hephaestus.store.nodes import list_nodes as list_node_records
@@ -114,6 +119,12 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         nodes = list_node_records(self._app._workspace.state_db_path)
         return [self._node_payload(node) for node in nodes]
+
+    def list_artifacts(self) -> list[dict]:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        artifacts = list_artifact_records(self._app._workspace.state_db_path)
+        return [self._artifact_payload(artifact) for artifact in artifacts]
 
     def list_workflows(self) -> list[dict]:
         return [workflow_to_dict(workflow) for workflow in list_workflow_records(self._root)]
@@ -213,6 +224,58 @@ class Bridge:
             raise RuntimeError("no app bound to bridge")
         delete_node_record(self._app._workspace.state_db_path, node_id, self._app._workspace.root)
 
+    def create_artifact(
+        self,
+        name: str,
+        headings=None,
+        tags=None,
+        good_looks_like: str = "",
+        antipatterns: str = "",
+        examples: str = "",
+    ) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        artifact = create_artifact_record(
+            self._app._workspace.state_db_path,
+            name=name,
+            tags=list(tags or []),
+            headings=self._coerce_artifact_headings(headings),
+            good_looks_like=good_looks_like,
+            antipatterns=antipatterns,
+            examples=examples,
+        )
+        return self._artifact_payload(artifact)
+
+    def update_artifact(
+        self,
+        artifact_id: str,
+        name: str,
+        headings=None,
+        tags=None,
+        good_looks_like: str = "",
+        antipatterns: str = "",
+        examples: str = "",
+    ) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        artifact = update_artifact_record(
+            self._app._workspace.state_db_path,
+            artifact_id,
+            name=name,
+            tags=list(tags or []),
+            headings=self._coerce_artifact_headings(headings),
+            good_looks_like=good_looks_like,
+            antipatterns=antipatterns,
+            examples=examples,
+        )
+        return self._artifact_payload(artifact)
+
+    def delete_artifact(self, artifact_id: str) -> dict:
+        if self._app is None:
+            raise RuntimeError("no app bound to bridge")
+        artifact = delete_artifact_record(self._app._workspace.state_db_path, artifact_id)
+        return self._artifact_payload(artifact)
+
     def list_threads(self, node_id: str) -> list[dict]:
         if self._app is None:
             raise RuntimeError("no app bound to bridge")
@@ -311,6 +374,22 @@ class Bridge:
     @staticmethod
     def _node_payload(node) -> dict:
         return {**asdict(node), "status": "idle"}
+
+    @staticmethod
+    def _artifact_payload(artifact) -> dict:
+        return asdict(artifact)
+
+    @staticmethod
+    def _coerce_artifact_headings(headings) -> list[ArtifactHeading]:
+        payload = list(headings or [])
+        return [
+            ArtifactHeading(
+                heading=str(item.get("heading", "")),
+                required=bool(item.get("required", False)),
+                min_items=item.get("min_items"),
+            )
+            for item in payload
+        ]
 
 
 class DesktopApp:

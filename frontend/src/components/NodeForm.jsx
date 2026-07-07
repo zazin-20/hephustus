@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import ArtifactBindingEditor from './ArtifactBindingEditor.jsx'
 
 const INPUT =
   'w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-white/25'
@@ -105,6 +106,7 @@ export default function NodeForm({
   initialNode = null,
   catalog,
   ruleSet,
+  artifacts = [],
   live,
   onSubmit,
   onCancel,
@@ -311,16 +313,18 @@ export default function NodeForm({
         </div>
       </Field>
 
-      <ListEditor
+      <ArtifactBindingEditor
         label="Inputs"
         value={form.inputs}
         onChange={(value) => updateField('inputs', value)}
+        artifacts={artifacts}
         placeholder="agents/specs/028.md"
       />
-      <ListEditor
+      <ArtifactBindingEditor
         label="Outputs"
         value={form.outputs}
         onChange={(value) => updateField('outputs', value)}
+        artifacts={artifacts}
         placeholder="agents/handoffs/028.md"
       />
       <ListEditor

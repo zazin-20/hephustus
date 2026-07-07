@@ -17,6 +17,7 @@ from hephaestus.integration.service import AgentService
 from hephaestus.okf_layout import OKFLayout
 from hephaestus.rules.base import HephaestusRule
 from hephaestus.skills import resolve_skill_ref
+from hephaestus.store.artifacts import get_artifact
 from hephaestus.store.nodes import Node, get_node
 from hephaestus.store.runs import get_run
 from hephaestus.store.threads import list_turns
@@ -520,6 +521,12 @@ class WorkflowRuntime:
         )
 
     def _resolve_path(self, declared: str) -> Path:
+        try:
+            artifact = get_artifact(self.service.state_db_path, declared)
+        except KeyError:
+            pass
+        else:
+            return self._resolve_path(artifact.path)
         path = Path(declared)
         if path.is_absolute():
             return path

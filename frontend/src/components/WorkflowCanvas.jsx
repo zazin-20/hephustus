@@ -4,6 +4,7 @@ import {
   createNode,
   getCatalog,
   hasBridge,
+  listArtifacts,
   listNodes,
   listRules,
   pickDirectory,
@@ -256,6 +257,7 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
   const [availableNodes, setAvailableNodes] = useState(
     () => (workflowCanvas?.available_nodes ?? []).map(normalizeAvailableNode),
   )
+  const [artifacts, setArtifacts] = useState([])
   const [catalog, setCatalog] = useState(CATALOG_MOCK)
   const [ruleSet, setRuleSet] = useState(RULES_MOCK)
   const [showNodeForm, setShowNodeForm] = useState(false)
@@ -284,11 +286,13 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
   useEffect(() => {
     if (live && hasBridge()) return
     setAvailableNodes((workflowCanvas?.available_nodes ?? []).map(normalizeAvailableNode))
+    setArtifacts([])
   }, [workflowCanvas, live])
 
   useEffect(() => {
     if (!live || !hasBridge()) return
     void refreshAvailableNodes()
+    void refreshArtifacts()
     void Promise.all([getCatalog(), listRules()]).then(([nextCatalog, nextRules]) => {
       if (nextCatalog) setCatalog(nextCatalog)
       if (nextRules) setRuleSet(nextRules)
@@ -399,6 +403,11 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
     const normalized = rows.map(normalizeAvailableNode)
     setAvailableNodes(normalized)
     syncWorkflowNodes(normalized)
+  }
+
+  async function refreshArtifacts() {
+    if (!hasBridge()) return
+    setArtifacts((await listArtifacts()) || [])
   }
 
   async function browseDirectory() {
@@ -753,6 +762,7 @@ export default function WorkflowCanvas({ workflowCanvas, live }) {
                 initialNode={editingNode}
                 catalog={catalog}
                 ruleSet={ruleSet}
+                artifacts={artifacts}
                 live={hasBridge()}
                 onSubmit={saveNode}
                 onCancel={closeNodeForm}

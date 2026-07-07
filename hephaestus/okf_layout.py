@@ -70,6 +70,10 @@ class OKFLayout:
         return self.agents_root / "skills"
 
     @property
+    def artifacts_dir(self) -> Path:
+        return self.agents_root / "artifacts"
+
+    @property
     def worker_dir(self) -> Path:
         return self.agents_root / "worker"
 
@@ -83,6 +87,7 @@ class OKFLayout:
             self.workflows_dir,
             self.archive_dir,
             self.skills_dir,
+            self.artifacts_dir,
         )
 
     def resolve(self, relative: str | Path) -> Path:

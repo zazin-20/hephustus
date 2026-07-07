@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  createArtifact,
   createNode,
+  deleteArtifact,
   deleteNode,
   evaluateSpawn,
   getCatalog,
   getTrace,
   getTranscript,
   hasBridge,
+  listArtifacts,
   listNodes,
   listRules,
   listThreads,
@@ -15,9 +18,11 @@ import {
   pickDirectory,
   sendMessage,
   setTurnIncluded,
+  updateArtifact,
   updateNode,
 } from '../api.js'
 import { CATALOG_MOCK, COORDINATOR_MOCK, RULES_MOCK } from '../mock.js'
+import ArtifactForm from './ArtifactForm.jsx'
 import NodeForm from './NodeForm.jsx'
 
 const INPUT =
@@ -90,6 +95,16 @@ function nextMockId(profiles) {
   return `node-${String(next).padStart(3, '0')}`
 }
 
+function nextMockArtifactId(artifacts) {
+  const counters = artifacts
+    .map((artifact) => artifact.artifact_id)
+    .filter((artifactId) => artifactId.startsWith('artifact-'))
+    .map((artifactId) => Number.parseInt(artifactId.split('-')[1], 10))
+    .filter(Number.isFinite)
+  const next = counters.length ? Math.max(...counters) + 1 : 1
+  return `artifact-${String(next).padStart(3, '0')}`
+}
+
 async function copyToClipboard(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -116,10 +131,15 @@ async function copyToClipboard(text) {
 
 
 export default function Coordinator() {
+  const [catalogMode, setCatalogMode] = useState('nodes')
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingNode, setEditingNode] = useState(null)
+  const [artifacts, setArtifacts] = useState([])
+  const [selectedArtifactId, setSelectedArtifactId] = useState(null)
+  const [showArtifactForm, setShowArtifactForm] = useState(false)
+  const [editingArtifact, setEditingArtifact] = useState(null)
   const [catalog, setCatalog] = useState(CATALOG_MOCK)
   const [ruleSet, setRuleSet] = useState(RULES_MOCK)
   const [busy, setBusy] = useState(false)
@@ -141,6 +161,7 @@ export default function Coordinator() {
 
   useEffect(() => {
     loadNodes()
+    void loadArtifacts()
     if (hasBridge()) {
       void getCatalog().then((c) => c && setCatalog(c))
       void listRules().then((r) => r && setRuleSet(r))
@@ -232,6 +253,22 @@ export default function Coordinator() {
     })
   }
 
+  async function loadArtifacts() {
+    if (!hasBridge()) {
+      setArtifacts([])
+      setSelectedArtifactId(null)
+      return
+    }
+
+    const rows = await listArtifacts()
+    const nextArtifacts = rows || []
+    setArtifacts(nextArtifacts)
+    setSelectedArtifactId((current) => {
+      if (current && nextArtifacts.some((artifact) => artifact.artifact_id === current)) return current
+      return nextArtifacts[0]?.artifact_id ?? null
+    })
+  }
+
   async function loadThreadsFor(nodeId, preferredThreadId) {
     if (!hasBridge()) {
       setThreads([])
@@ -304,6 +341,24 @@ export default function Coordinator() {
   function closeForm() {
     setEditingNode(null)
     setShowForm(false)
+    setError('')
+  }
+
+  function openCreateArtifactForm() {
+    setEditingArtifact(null)
+    setShowArtifactForm(true)
+    setError('')
+  }
+
+  function openEditArtifactForm(artifact) {
+    setEditingArtifact(artifact)
+    setShowArtifactForm(true)
+    setError('')
+  }
+
+  function closeArtifactForm() {
+    setEditingArtifact(null)
+    setShowArtifactForm(false)
     setError('')
   }
 
@@ -381,6 +436,64 @@ export default function Coordinator() {
     }
   }
 
+  async function saveArtifact(payload) {
+    setBusy(true)
+    setError('')
+
+    try {
+      if (hasBridge()) {
+        const saved = editingArtifact
+          ? await updateArtifact(
+              editingArtifact.artifact_id,
+              payload.name,
+              payload.headings,
+              payload.tags,
+              payload.good_looks_like,
+              payload.antipatterns,
+              payload.examples,
+            )
+          : await createArtifact(
+              payload.name,
+              payload.headings,
+              payload.tags,
+              payload.good_looks_like,
+              payload.antipatterns,
+              payload.examples,
+            )
+        await loadArtifacts()
+        setSelectedArtifactId(saved?.artifact_id || null)
+      } else {
+        const saved = editingArtifact
+          ? {
+              ...editingArtifact,
+              ...payload,
+              artifact_id: editingArtifact.artifact_id,
+              path: editingArtifact.path,
+              created_at: editingArtifact.created_at,
+            }
+          : {
+              ...payload,
+              artifact_id: nextMockArtifactId(artifacts),
+              path: `agents/artifacts/${nextMockArtifactId(artifacts)}.md`,
+              created_at: new Date().toISOString(),
+            }
+        setArtifacts((current) => (
+          editingArtifact
+            ? current.map((artifact) => (artifact.artifact_id === saved.artifact_id ? saved : artifact))
+            : [...current, saved]
+        ))
+        setSelectedArtifactId(saved.artifact_id)
+      }
+      setEditingArtifact(null)
+      setShowArtifactForm(false)
+    } catch (err) {
+      setError(err?.message || `Failed to ${editingArtifact ? 'update' : 'create'} artifact.`)
+      throw err
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function removeNode(nodeId) {
     setBusy(true)
     setError('')
@@ -398,6 +511,28 @@ export default function Coordinator() {
       }
     } catch (err) {
       setError(err?.message || 'Failed to delete node.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeArtifact(artifactId) {
+    setBusy(true)
+    setError('')
+    try {
+      if (hasBridge()) {
+        await deleteArtifact(artifactId)
+        await loadArtifacts()
+      } else {
+        const nextArtifacts = artifacts.filter((artifact) => artifact.artifact_id !== artifactId)
+        setArtifacts(nextArtifacts)
+        setSelectedArtifactId((current) => {
+          if (current && current !== artifactId) return current
+          return nextArtifacts[0]?.artifact_id ?? null
+        })
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to delete artifact.')
     } finally {
       setBusy(false)
     }
@@ -486,26 +621,100 @@ export default function Coordinator() {
   })
 
   const selected = profiles.find((profile) => profile.node_id === selectedId) || null
+  const selectedArtifact = artifacts.find((artifact) => artifact.artifact_id === selectedArtifactId) || null
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
       <aside className="flex min-h-[70vh] flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]">
         <div className="border-b border-white/5 px-4 py-3">
-          <div className="text-sm font-semibold text-slate-200">Roster</div>
-          <div className="text-xs text-slate-500">{profiles.length} nodes</div>
+          <div className="flex gap-2">
+            {[
+              { id: 'nodes', label: 'Nodes' },
+              { id: 'artifacts', label: 'Artifacts' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setCatalogMode(item.id)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                  catalogMode === item.id
+                    ? 'bg-orange-500/15 text-orange-200 ring-1 ring-inset ring-orange-500/30'
+                    : 'bg-black/20 text-slate-500 ring-1 ring-inset ring-white/10 hover:text-slate-200'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-slate-500">
+            {catalogMode === 'nodes' ? `${profiles.length} nodes` : `${artifacts.length} artifacts`}
+          </div>
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-3">
-          {profiles.length === 0 ? (
+          {catalogMode === 'nodes' ? (
+            profiles.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-500">
+                No nodes yet.
+              </div>
+            ) : (
+              profiles.map((profile) => (
+                <div
+                  key={profile.node_id}
+                  className={`block w-full rounded-xl border p-3 text-left transition ${
+                    selectedId === profile.node_id
+                      ? 'border-orange-500/40 bg-orange-500/10 shadow-lg shadow-orange-950/20'
+                      : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(profile.node_id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="truncate text-sm font-semibold text-slate-100">{profile.name}</div>
+                      <div className="mt-1 font-mono text-[11px] text-slate-500">{profile.node_id}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditForm(profile)}
+                      className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-white/20 hover:text-slate-200"
+                      aria-label={`Edit ${profile.name}`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <ProviderPill provider={profile.provider} />
+                    <TagPills tags={profile.tags} />
+                    <StatusBadge status={profile.status || 'idle'} />
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => void removeNode(profile.node_id)}
+                      className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-rose-500/30 hover:text-rose-300"
+                      aria-label={`Delete ${profile.name}`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
+            )
+          ) : artifacts.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-500">
-              No nodes yet.
+              No artifacts yet.
             </div>
           ) : (
-            profiles.map((profile) => (
+            artifacts.map((artifact) => (
               <div
-                key={profile.node_id}
+                key={artifact.artifact_id}
                 className={`block w-full rounded-xl border p-3 text-left transition ${
-                  selectedId === profile.node_id
+                  selectedArtifactId === artifact.artifact_id
                     ? 'border-orange-500/40 bg-orange-500/10 shadow-lg shadow-orange-950/20'
                     : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-white/[0.03]'
                 }`}
@@ -513,34 +722,35 @@ export default function Coordinator() {
                 <div className="flex items-start justify-between gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedId(profile.node_id)}
+                    onClick={() => setSelectedArtifactId(artifact.artifact_id)}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <div className="truncate text-sm font-semibold text-slate-100">{profile.name}</div>
-                    <div className="mt-1 font-mono text-[11px] text-slate-500">{profile.node_id}</div>
+                    <div className="truncate text-sm font-semibold text-slate-100">{artifact.name}</div>
+                    <div className="mt-1 font-mono text-[11px] text-slate-500">{artifact.artifact_id}</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => openEditForm(profile)}
+                    onClick={() => openEditArtifactForm(artifact)}
                     className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-white/20 hover:text-slate-200"
-                    aria-label={`Edit ${profile.name}`}
+                    aria-label={`Edit ${artifact.name}`}
                   >
                     Edit
                   </button>
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">
-                  <ProviderPill provider={profile.provider} />
-                  <TagPills tags={profile.tags} />
-                  <StatusBadge status={profile.status || 'idle'} />
+                  <TagPills tags={artifact.tags} />
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500">
+                  {artifact.headings.length} heading rule{artifact.headings.length === 1 ? '' : 's'}
                 </div>
 
                 <div className="mt-3">
                   <button
                     type="button"
-                    onClick={() => void removeNode(profile.node_id)}
+                    onClick={() => void removeArtifact(artifact.artifact_id)}
                     className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-slate-400 hover:border-rose-500/30 hover:text-rose-300"
-                    aria-label={`Delete ${profile.name}`}
+                    aria-label={`Delete ${artifact.name}`}
                   >
                     Delete
                   </button>
@@ -551,32 +761,112 @@ export default function Coordinator() {
         </div>
 
         <div className="border-t border-white/5 p-3">
-          {showForm ? (
-            <NodeForm
-              initialNode={editingNode}
-              catalog={catalog}
-              ruleSet={ruleSet}
-              live={hasBridge()}
-              onSubmit={saveNode}
-              onCancel={closeForm}
-              onPickDirectory={browseDirectory}
-              submitLabel={editingNode ? 'Save' : 'Create'}
-              title={editingNode ? `Edit ${editingNode.name}` : 'Create node'}
-            />
+          {catalogMode === 'nodes' ? (
+            showForm ? (
+              <NodeForm
+                initialNode={editingNode}
+                catalog={catalog}
+                ruleSet={ruleSet}
+                artifacts={artifacts}
+                live={hasBridge()}
+                onSubmit={saveNode}
+                onCancel={closeForm}
+                onPickDirectory={browseDirectory}
+                submitLabel={editingNode ? 'Save' : 'Create'}
+                title={editingNode ? `Edit ${editingNode.name}` : 'Create node'}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={openCreateForm}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10"
+              >
+                Add Node
+              </button>
+            )
           ) : (
-            <button
-              type="button"
-              onClick={openCreateForm}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10"
-            >
-              Add Node
-            </button>
+            showArtifactForm ? (
+              <ArtifactForm
+                initialArtifact={editingArtifact}
+                onSubmit={saveArtifact}
+                onCancel={closeArtifactForm}
+                submitLabel={editingArtifact ? 'Save' : 'Create'}
+                title={editingArtifact ? `Edit ${editingArtifact.name}` : 'Create artifact'}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={openCreateArtifactForm}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10"
+              >
+                Add Artifact
+              </button>
+            )
           )}
         </div>
       </aside>
 
       <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-6">
-        {selected ? (
+        {catalogMode === 'artifacts' ? (
+          selectedArtifact ? (
+            <div className="flex min-h-[70vh] flex-col gap-6">
+              <div className="border-b border-white/5 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-lg font-semibold text-slate-100">{selectedArtifact.name}</div>
+                  <TagPills tags={selectedArtifact.tags} />
+                </div>
+                <div className="mt-2 font-mono text-xs text-slate-500">{selectedArtifact.artifact_id}</div>
+                <div className="mt-1 font-mono text-xs text-slate-600">{selectedArtifact.path}</div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Heading rules</div>
+                  <div className="mt-3 space-y-2">
+                    {selectedArtifact.headings.length ? (
+                      selectedArtifact.headings.map((heading) => (
+                        <div key={heading.heading} className="rounded-xl border border-white/5 bg-black/30 p-3">
+                          <div className="text-sm font-semibold text-slate-100">{heading.heading}</div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                            <span className="rounded-full border border-white/10 px-2 py-0.5">
+                              {heading.required ? 'required' : 'optional'}
+                            </span>
+                            {heading.min_items ? (
+                              <span className="rounded-full border border-white/10 px-2 py-0.5">
+                                min_items: {heading.min_items}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-slate-500">No custom heading rules.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    ['Best Practices', selectedArtifact.good_looks_like],
+                    ['Antipatterns', selectedArtifact.antipatterns],
+                    ['Examples', selectedArtifact.examples],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</div>
+                      <div className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                        {value || 'No content yet.'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid min-h-[70vh] place-items-center text-center text-slate-500">
+              Select an artifact to inspect its authored rules and guidance.
+            </div>
+          )
+        ) : selected ? (
           <div className="flex min-h-[70vh] flex-col gap-4">
             <div className="border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
