@@ -12,6 +12,25 @@ changes that are narrower than the system-level rollup in
 
 ---
 
+## 2026-07-07 — Coordinator retirement spec'd (rehome → Library + Console)
+
+User decided to retire the **Coordinator** view. Grounded it: ADR-0001 (which
+tied the graph to "Coordinator pipelines") is superseded by ADR-0003, and the
+canonical `governance-engine.md` has no Coordinator concept — but the view
+uniquely hosts artifact authoring (#29's `ArtifactForm`, mounted nowhere else),
+node delete, and the single-node threaded console + spawn card. So removal =
+**rehome, not delete**.
+
+Resolved layout (user picked Library as default): new **Library** tab (node +
+artifact catalogs, full CRUD, reusing `NodeForm`/`ArtifactForm`) + new **Console**
+tab (threaded conversation, trace, spawn card, composer); delete `Coordinator.jsx`;
+`App.jsx` default → `library`; `WorkflowCanvas` unchanged. Pure frontend reorg —
+no backend/bridge/DAL touch. Spec → `issues/DRAFT-coordinator-rehome.md`;
+DAG-placed. Also landed a small display fix: NodeForm rule pills now read
+"Path scope/Model lock/Skill proof · G-00x" instead of a bare id.
+
+---
+
 ## 2026-07-07 — Handoff review: #29 artifact authoring → APPROVE
 
 Reviewed the Codex Worker's handoff for #29 (commit `d833d4a`, branch

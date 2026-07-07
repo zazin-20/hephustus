@@ -72,7 +72,9 @@ ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
   |
   -> #28  DONE  Node authoring (full Node contract authorable + editable)
        |
-       -> #29  OPEN  Artifact authoring (author + connect to a node)  (INDEPENDENT)
+       -> #29  DONE  Artifact authoring (author + connect to a node)
+             |
+             -> [coordinator-rehome]  DRAFT — retire Coordinator; rehome to Library + Console  (frontend-only)
 ```
 
 - **ADR-0003** (`docs/adr/0003-node-graph-is-an-executable-gatekeeper-runtime.md`)
