@@ -92,7 +92,7 @@ export async function sendMessage(agentId, prompt, issueId, model) {
   return null
 }
 
-// --- Coordinator / catalog + rules ---
+// --- Library / catalog + rules ---
 export async function getCatalog() {
   if (window.pywebview?.api?.get_catalog) return await window.pywebview.api.get_catalog()
   return null
@@ -108,7 +108,7 @@ export async function pickDirectory() {
   return null
 }
 
-// --- Coordinator / nodes ---
+// --- Library + Console / nodes ---
 export async function listNodes() {
   if (window.pywebview?.api?.list_nodes) return await window.pywebview.api.list_nodes()
   return null

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import Console from './components/Console.jsx'
 import CodeView from './components/CodeView.jsx'
+import Library from './components/Library.jsx'
 import RunAgent from './components/RunAgent.jsx'
-import Coordinator from './components/Coordinator.jsx'
 import WorkflowCanvas from './components/WorkflowCanvas.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import { onPush, whenReady, getState, hasBridge } from './api.js'
@@ -10,7 +11,7 @@ import { MOCK } from './mock.js'
 function AppInner() {
   const [snap, setSnap] = useState(null)
   const [live, setLive] = useState(false)
-  const [view, setView] = useState('coordinator')
+  const [view, setView] = useState('library')
   const { addToast } = useToast()
   const seenViolations = useRef(new Set())
   const seenWorkflowNotifications = useRef(new Set())
@@ -81,7 +82,7 @@ function AppInner() {
           </div>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5 text-xs">
-              {['coordinator', 'canvas', 'code', 'agent'].map((v) => (
+              {['library', 'console', 'canvas', 'code', 'agent'].map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -102,14 +103,18 @@ function AppInner() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-6">
-        {view === 'code' ? (
+        {view === 'library' ? (
+          <Library />
+        ) : view === 'console' ? (
+          <Console />
+        ) : view === 'code' ? (
           <CodeView />
         ) : view === 'agent' ? (
           <RunAgent />
         ) : view === 'canvas' ? (
           <WorkflowCanvas workflowCanvas={snap.workflow_canvas} live={live} />
         ) : (
-          <Coordinator />
+          <Library />
         )}
       </main>
     </div>

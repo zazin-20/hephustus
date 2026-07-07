@@ -10,3 +10,10 @@
 - Widened the desktop bridge and `frontend/src/api.js` with artifact CRUD, added a first-class artifact catalog/form in the coordinator, and updated node input/output editors to accept either an authored artifact id or a literal path.
 - Key decisions: kept the DB row as a thin index only, composed the markdown file as the source of truth, inferred editable heading rules back from `## Predicates`, and preserved existing `#28` literal-path behavior unchanged.
 - Verification: targeted red phase failed first with `3` collection errors, targeted green phase passed with `47 passed`, full backend suite passed with `216 passed`, and the frontend production build passed after `npm --prefix frontend ci`.
+
+## 2026-07-07
+
+- Built issue `#30` without expanding scope: retired the Coordinator view by rehoming the catalog into new `Library.jsx`, rehoming the single-node interaction surface into new `Console.jsx`, updating `App.jsx` nav/default view, and deleting `frontend/src/components/Coordinator.jsx`.
+- Kept the reorganization frontend-only: product-code changes stayed inside `frontend/src/**`; no Python, bridge behavior, DAL, or tests were touched.
+- Preserved reachability for every moved capability: node CRUD including delete, artifact CRUD including delete, artifact detail pane, node picker, thread list, transcript copy, include/exclude turns, trace panel, spawn card, and message composer.
+- Verification: `"/c/Program Files/nodejs/npm.cmd" --prefix frontend ci` and `"/c/Program Files/nodejs/npm.cmd" --prefix frontend run build` both passed; a requested Git commit was attempted but blocked by `index.lock` permission denial in the worktree.
