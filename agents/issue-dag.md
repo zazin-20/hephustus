@@ -74,7 +74,10 @@ ADR-0003  ACCEPTED  (docs only — reconciles record to the shipped runtime)
        |
        -> #29  DONE  Artifact authoring (author + connect to a node)
              |
-             -> [coordinator-rehome]  DRAFT — retire Coordinator; rehome to Library + Console  (frontend-only)
+             -> #30  DONE  Retire Coordinator; rehome to Library + Console  (frontend-only)
+                   |
+                   -> [graph-runtime-convergence]  BACKLOG / needs-design — Console → canvas
+                      drill-in; role-based spawn card → graph gatekeeper (ADR-0003 §7.9 / gov §7.1)
 ```
 
 - **ADR-0003** (`docs/adr/0003-node-graph-is-an-executable-gatekeeper-runtime.md`)

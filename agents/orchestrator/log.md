@@ -227,3 +227,48 @@ docs to main, merged `feat/029-artifact-authoring` --no-ff, ran full suite on me
 main, pushed origin, closed #29. `T-artifact-authoring` → completed. The
 artifact-spec-authoring **authoring-UX gap** from the alignment report is now closed
 at the artifact layer; the constitution layer remains file/DAL-authored (open).
+
+---
+
+## 2026-07-07 — UI audit + governance-label fix + #30 (retire Coordinator)
+
+Post-#29 the user started a UI-layer pass. Delivered: (1) a full UI component
+inventory + an interactive storybook artifact (all ~37 components, mock data);
+(2) explained why G-001/2/3 are the fixed enforcement kernel over user-authored
+node config (not baked policy like the removed S-rules) — the real gap is that
+the *set* of governance primitives is fixed; (3) a small frontend fix — NodeForm
+rule pills now read "Path scope / Model lock / Skill proof · G-00x" (committed
+`349733c`, display-only).
+
+Then the user decided to **retire the Coordinator view**. Grounded it in the
+specs (superseded ADR-0001; absent from governance-engine.md) but flagged the
+hard blocker: Coordinator is the ONLY home for artifact authoring (#29), node
+delete, and the single-node console. So it's **rehome, not delete**. User chose
+Library as default. Spec'd → `issues/DRAFT-coordinator-rehome.md`, opened
+[#30](https://github.com/zazin-20/hephustus/issues/30), committed docs (`46af333`),
+pre-created worktree `.claude/worktrees/issue-030-coordinator-rehome`, dispatched
+one `codex:codex-rescue` Worker (frontend-only: split Coordinator → Library +
+Console, rewire App nav, delete Coordinator.jsx). Task:
+`tasks/T-coordinator-rehome.md`. Running; will find the codex PID → watch →
+verify → Architect review.
+
+---
+
+## 2026-07-07 — #30 landed; two ADR-0003-convergence flags filed to backlog
+
+Worker split cleanly (Library 702 + Console 628, Coordinator.jsx deleted, App nav
+→ library default). Commit blocked by an `index.lock` perms error — Orchestrator
+verified (build green 53 modules; zero lingering coordinator refs; the api.js +
+NodeForm edits are cosmetic comment/copy scrubs only) and committed `9575b14`.
+Architect handoff review **APPROVED** (`0d5887f`): met the reorg charter, nothing
+dropped — but with a sharp caveat that it is debt cleanup, NOT ADR-0003
+convergence. Two flags filed (user-directed) as
+`architect/issues/DRAFT-graph-runtime-convergence.md` (backlog/needs-design, NOT
+opened on GitHub): (1) Console should become a canvas node drill-in, not a peer
+tab (ADR-0003 §7.9); (2) the role-based spawn card contradicts the graph
+gatekeeper + role-removal (#18 / gov §7.1). DAG-placed under #30.
+
+Merge (user directed merge + file flags): committed the #30 tracking + flags docs
+to main, merged `feat/030-coordinator-rehome` --no-ff, verified merged main
+(frontend build + full py suite), pushed, closed #30. `T-coordinator-rehome` →
+completed.
