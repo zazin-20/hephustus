@@ -1,6 +1,6 @@
 ---
 title: Architect Log
-updated: 2026-07-05
+updated: 2026-07-09
 owner: architect
 ---
 
@@ -9,6 +9,69 @@ owner: architect
 Architect-local change history: design decisions, spec/handoff events, and rule
 changes that are narrower than the system-level rollup in
 [../log.md](../log.md).
+
+---
+
+## 2026-07-09 — PRD-01/02/03 decomposed into GitHub issues #31–#47
+
+Ground-truthed the three approved PRDs (`prds/PRD-01…03`) against the current
+codebase (Python core `hephaestus/` + `frontend/src/`) and cut them into 17
+tracer-bullet vertical-slice issues on the tracker, in integration order, all
+AFK + `ready-for-agent`. Key ground-truth findings that shaped the slicing:
+
+- `WorkflowRuntime.run` already accepts `confirm_edges` / `override_placements`
+  / `human_inputs`, but `Bridge.run_workflow` never passes them — a paused run
+  is a UI dead end. That seam became the wave's tracer bullet (#31).
+- Ask edges have no reject path at all; the queue dedup makes re-execution
+  impossible — revision loops are a real runtime feature, not UI polish (#35).
+- The literal-path fallback PRD-02 removes lives in TWO seams:
+  `workflow_runtime._resolve_path` and `integration/context._resolve_declared_path` (#37).
+- The PRD-03 learning backend is substantially built (corrections lifecycle,
+  frozen-rule promotion with supersede/disable, scope addressing, constitution
+  injection); the gap is bridge + UI (#43).
+- Nodes have no version field; placements resolve `node_id` live, so silent
+  drift is today's behavior (#45).
+
+Wave layout: PRD-01 → #31 session controls, #32 inspector, #33 run-state
+legend/filters, #34 snapshot-vs-draft, #35 rejection/revision, #36 Console
+dissolution + spawn-card retirement. PRD-02 → #37 artifact-identity edges,
+#38 flow visuals, #39 binding invalidation, #40 preflight, #41 context preview,
+#42 presentation layer. PRD-03 → #43 learning surface, #44 typed Library,
+#45 version pinning, #46 templates, #47 ad-hoc runner.
+
+Reconciliation: `issues/DRAFT-graph-runtime-convergence.md` marked RESOLVED —
+Flag 1 folded into #36 + #47, Flag 2 into #36. User-deferred items (dynamic
+fan-out; prompt/context compression via `context_policy`) were NOT expanded:
+#35/#38/#46 and #41 carry explicit non-goal boundaries instead. All UI-facing
+issues cite `agents/design-system/component-library.html` +
+`DESIGN_LANGUAGE_*.md` as the implementation guide. Created `issue-dag.md`
+(was referenced by the directive but absent) with the wave's dependency graph;
+open wave: #31, #32, #33, #37.
+
+---
+
+## 2026-07-08 - Graph runtime PRD set and gallery expansion
+
+Synthesized the graph-runtime design grill into three integration-ordered PRDs
+under `prds/`:
+
+- `PRD-01-canvas-runtime-command-center.md`
+- `PRD-02-artifact-flow-preflight-context.md`
+- `PRD-03-learning-library-and-secondary-runtime.md`
+
+The split matches the agreed rollout order:
+
+1. Canvas-first runtime command center and node drill-in
+2. Artifact flow clarity, preflight, and context visibility
+3. Learning/corrections, typed library inventory, templates, and the secondary
+   ad-hoc runtime path
+
+Also expanded the design-system component gallery to capture the agreed vNext
+runtime surfaces, markers, states, and explicit out-of-scope constraints so the
+UI decisions are queryable before issue slicing.
+
+No product code changed in this pass; this was a planning and design artifact
+update only.
 
 ---
 

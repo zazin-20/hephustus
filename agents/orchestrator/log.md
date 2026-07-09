@@ -1,7 +1,7 @@
 ---
 title: Orchestrator Log
 role: orchestrator
-updated: 2026-07-05
+updated: 2026-07-09
 owner: orchestrator
 ---
 
@@ -10,6 +10,26 @@ owner: orchestrator
 Orchestrator-local change history: intake/routing decisions and directive
 changes the Orchestrator lands directly. Narrower than the system-level rollup
 in [../log.md](../log.md).
+
+---
+
+## 2026-07-09 — T-prd-to-issues: PRDs 01–03 decomposed into issues #31–#47
+
+Dispatched an Architect-role agent to ground-truth the three approved PRDs
+(`agents/architect/prds/`) against `hephaestus/` + `frontend/src/` and run
+/to-issues on `zazin-20/hephustus`.
+
+**What happened:** first run hit an API session limit after completing
+ground-truthing but before any tracker writes. Resumed the SAME agent via
+SendMessage (its gap analysis stayed in context) rather than re-dispatching —
+it then cut 17 tracer-bullet issues (#31–#47) in PRD integration order, marked
+`architect/issues/DRAFT-graph-runtime-convergence.md` resolved (folded into
+#36/#47/#31), created `architect/issue-dag.md` (open wave: #31, #32, #33,
+#37), and logged its slice to `architect/log.md`.
+
+**Verified:** all 17 issues open on the tracker (gh issue list). Deferred
+scope (T-dynamic-fanout, T-prompt-compression) fenced as explicit non-goals,
+not folded in. Task file moved to `tasks/completed/`.
 
 ---
 

@@ -1,9 +1,21 @@
-# BACKLOG (needs design) — Converge single-node observation + spawn onto the graph runtime
+# RESOLVED (2026-07-09) — Converge single-node observation + spawn onto the graph runtime
 
-> **Status: backlog / needs-design.** NOT ready to dispatch and NOT opened on
-> GitHub. Requires an ADR-0003-alignment design pass (grill) before it becomes a
-> buildable issue. Recorded so the #30 reorg is never mistaken for convergence
-> on the node-graph runtime.
+> **Status: resolved — folded into the PRD decomposition wave (#31–#47).**
+> The design pass this draft asked for happened as the graph-runtime grill →
+> PRD-01/02/03, and the flags below were cut into GitHub issues rather than
+> duplicated:
+>
+> - **Flag 1 (Console → canvas node drill-in):** GitHub **#36** (dissolve
+>   Console into the selected-node inspector, canvas becomes default view) on
+>   the drill-in half, and **#47** (secondary ad-hoc runner as a temporary
+>   one-node graph through `WorkflowRuntime`) on the standalone half. The
+>   canvas-as-command-center substrate is #31–#35.
+> - **Flag 2 (role-based spawn card):** GitHub **#36** removes the
+>   `parseHandoffMarker → evaluateSpawn → SpawnCard` flow and the
+>   `parse_handoff_marker` / `evaluate_spawn` bridge endpoints; graph-edge
+>   gating (already in `workflow_runtime.py`) is the only transition gate.
+>
+> Kept for history; do not dispatch from this file.
 
 **Origin:** Architect handoff review of #30 (2026-07-07). #30 retired the
 Coordinator *name* and split it into **Library** (authored state) + **Console**

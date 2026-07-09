@@ -1,0 +1,1791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hephaestus — Component Library</title>
+<!--
+  CANONICAL COMPONENT LIBRARY — agents/design-system/component-library.html
+  Built against the linked design-language system:
+    DESIGN_LANGUAGE.md (direction) -> DESIGN_LANGUAGE_VISUAL / VOCABULARY /
+    INTERACTIONS / MOTION / PRODUCT / STATUS -> DESIGN.md (tokens)
+  Every class below maps to a token or rule in those documents. Downstream
+  agents: copy the CSS custom properties and component patterns from here.
+  The older component-gallery.html is a placeholder exploration sandbox only.
+-->
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap");
+
+/* ============================================================
+   1. TOKEN LAYER — implements DESIGN.md
+   ============================================================ */
+:root{
+  color-scheme: dark;
+
+  /* Neutral field (surface ladder: ground -> shell -> panel -> card) */
+  --ground-0:#000000;
+  --ground-1:#07090e;
+  --ground-2:#0d1219;
+  --ground-3:#131a24;
+
+  /* Structural lines */
+  --line-subtle:rgba(154,180,209,.14);
+  --line-strong:rgba(203,225,244,.34);
+  --line-critical:rgba(255,127,149,.55);
+
+  /* Text */
+  --text-primary:#eef6fd;
+  --text-secondary:#a9bacc;
+  --text-muted:#5f7284;
+  --text-inverse:#04121a;
+
+  /* Signals — meaning, not mood. Live = charged magenta. */
+  --signal-live:#D412E9;   /* selected / active / live / energized */
+  --signal-pass:#7bf2c0;   /* confirmed / healthy / flowing / passed */
+  --signal-warn:#ffd94d;   /* caution / waiting human / degraded */
+  --signal-stop:#ff7f95;   /* blocked / failed / incompatible / violation */
+  --signal-stale:#b5b6ff;  /* stale / pinned / versioned / deferred */
+
+  --live-08:rgba(212,18,233,.08);   --live-16:rgba(212,18,233,.16);  --live-30:rgba(212,18,233,.30);  --live-52:rgba(212,18,233,.52);
+  --pass-08:rgba(123,242,192,.08);  --pass-16:rgba(123,242,192,.16); --pass-30:rgba(123,242,192,.30); --pass-58:rgba(123,242,192,.58);
+  --warn-08:rgba(255,217,77,.08);   --warn-16:rgba(255,217,77,.16);  --warn-30:rgba(255,217,77,.30);  --warn-52:rgba(255,217,77,.52);
+  --stop-08:rgba(255,127,149,.08);  --stop-16:rgba(255,127,149,.16); --stop-30:rgba(255,127,149,.30); --stop-58:rgba(255,127,149,.58);
+  --stale-08:rgba(181,182,255,.08); --stale-16:rgba(181,182,255,.16);--stale-30:rgba(181,182,255,.30);
+
+  /* Spacing rhythm */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
+
+  /* Radius — hard geometry. radius-1 only for small chips. */
+  --radius-0:0; --radius-1:2px;
+
+  /* Type */
+  --font-sans:"Archivo","Segoe UI",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+
+  /* Depth — tight, directional, never fuzzy-atmospheric */
+  --shadow-panel:0 18px 40px -28px rgba(0,0,0,.9);
+  --shadow-card:0 8px 20px -16px rgba(0,0,0,.8);
+  --glow-live:0 0 0 1px var(--live-30), 0 0 18px -6px var(--live-30);
+  --glow-text-live:0 0 2px rgba(212,18,233,.55), 0 0 9px rgba(212,18,233,.85); /* neon: white core, magenta halo */
+  --glow-pass:0 0 0 1px var(--pass-30), 0 0 18px -6px var(--pass-30);
+  --glow-stop:0 0 0 1px var(--stop-30), 0 0 18px -6px var(--stop-30);
+
+  /* Motion timing bands — DESIGN_LANGUAGE_MOTION.md */
+  --t-hover:90ms;          /* hover-preview 70-110 */
+  --t-focus:120ms;         /* field-focus / focus-visible / lock / dismiss 90-140 */
+  --t-commit:160ms;        /* commit / alarm / revert 140-180 */
+  --t-transit:210ms;       /* transit / disclose / pending 180-240 */
+  --t-flow:280ms;          /* reroute / trace 220-320 */
+  --ease-hard:cubic-bezier(.18,.84,.32,1);
+  --ease-settle:cubic-bezier(.16,.88,.24,1);
+  --ease-structural:cubic-bezier(.22,.74,.25,1);
+
+  --grid-line:rgba(212,18,233,.06);
+  --sb-w:272px;
+}
+
+/* ============================================================
+   2. BASE
+   ============================================================ */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--ground-0);
+  color:var(--text-secondary);
+  font-family:var(--font-sans);
+  font-size:13px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--live-30)}
+a{color:inherit}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--signal-live);outline-offset:0}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--ground-0)}
+::-webkit-scrollbar-thumb{background:var(--ground-3);border:1px solid var(--line-subtle)}
+::-webkit-scrollbar-thumb:hover{background:#1b2634}
+
+.mono{font-family:var(--font-mono)}
+.muted{color:var(--text-muted)}
+.row{display:flex;align-items:center;gap:var(--space-2)}
+.stack{display:flex;flex-direction:column;gap:var(--space-3)}
+
+/* Type roles */
+.type-display{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--text-primary);line-height:1.2}
+.type-title{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--text-primary)}
+.lbl{display:block;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--text-muted)}
+.type-meta{font-family:var(--font-mono);font-size:13px;color:var(--text-muted)}
+
+/* ============================================================
+   3. SURFACES — panel / card / frames / textures
+   ============================================================ */
+.panel{background:var(--ground-2);border:1px solid var(--line-subtle);box-shadow:var(--shadow-panel)}
+.panel--strong{border:2px solid var(--line-strong)}
+.card{background:var(--ground-1);border:1px solid var(--line-subtle);box-shadow:var(--shadow-card)}
+.card--inset{background:var(--ground-0);box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+.frame-plate{border:2px solid var(--line-strong);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 0 0 1px rgba(0,0,0,.35)}
+
+/* HUD corner markers — active/high-value operational surfaces only */
+.hud{position:relative}
+.hud::before,.hud::after{content:"";position:absolute;width:14px;height:14px;border-top:2px solid var(--signal-live);pointer-events:none;z-index:2}
+.hud::before{top:6px;left:6px;border-left:2px solid var(--signal-live)}
+.hud::after{top:6px;right:6px;border-right:2px solid var(--signal-live)}
+
+/* Scanline texture — canvas grounds and live stream surfaces only */
+.scanlines{position:relative}
+.scanlines::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.08;z-index:1;
+  background-image:linear-gradient(to bottom,rgba(255,255,255,.05) 0,rgba(255,255,255,.05) 1px,transparent 1px,transparent 4px)}
+
+/* Wireframe ground plane — graph surfaces */
+.grid-ground{background-color:var(--ground-0);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:24px 24px}
+
+/* Industrial caution striping — human gates / overrides, real caution only */
+.stripe-caution{background-image:repeating-linear-gradient(-45deg,var(--warn-16) 0 8px,rgba(20,20,22,.18) 8px 16px);border:1px solid var(--warn-52)}
+
+/* Blueprint / spec-sheet framing — contracts, artifact specs */
+.spec-sheet{background:var(--ground-1);border:1px solid var(--line-subtle);border-left:2px solid var(--live-30)}
+
+/* ============================================================
+   4. SIGNAL MARKERS — rectangular, semantic, uppercase
+   ============================================================ */
+.sig{display:inline-flex;align-items:center;gap:5px;border-radius:var(--radius-1);padding:2px 7px;
+  font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-secondary);background:var(--ground-3);box-shadow:inset 0 0 0 1px var(--line-subtle);white-space:nowrap}
+.sig::before{content:"";width:6px;height:6px;background:currentColor;flex:none}
+.sig--bare::before{display:none}
+.sig-live {color:var(--text-primary); text-shadow:var(--glow-text-live); background:var(--live-08); box-shadow:inset 0 0 0 1px var(--live-30)}
+.sig-live::before{background:var(--signal-live)}
+.sig-pass {color:var(--signal-pass); background:var(--pass-08); box-shadow:inset 0 0 0 1px var(--pass-30)}
+.sig-warn {color:var(--signal-warn); background:var(--warn-08); box-shadow:inset 0 0 0 1px var(--warn-30)}
+.sig-stop {color:var(--signal-stop); background:var(--stop-08); box-shadow:inset 0 0 0 1px var(--stop-30)}
+.sig-stale{color:var(--signal-stale);background:var(--stale-08);box-shadow:inset 0 0 0 1px var(--stale-30)}
+.sig-solid-stop{color:var(--text-inverse);background:var(--signal-stop);box-shadow:none}
+.sig-solid-warn{color:var(--text-inverse);background:var(--signal-warn);box-shadow:none}
+
+/* Typed chip — tag / filter / removable entry */
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-subtle);background:var(--ground-1);
+  border-radius:var(--radius-1);padding:3px 8px;font-size:13px;color:var(--text-secondary)}
+.chip .ty{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);
+  border-right:1px solid var(--line-subtle);padding-right:6px}
+.chip .x{cursor:pointer;color:var(--text-muted);background:none;border:none;padding:0 2px;font-size:12px;line-height:1}
+.chip .x:hover{color:var(--signal-stop)}
+
+/* Serial / provenance mark — forge-stamp identity cue */
+.marker-serial{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;color:var(--text-muted);
+  border:1px solid var(--line-subtle);border-left:2px solid var(--stale-30);padding:1px 6px;background:var(--ground-0)}
+
+/* ============================================================
+   5. CONTROLS — buttons, fields, segmented switches
+   ============================================================ */
+.btn{border-radius:var(--radius-0);padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;
+  color:var(--text-secondary);border:1px solid var(--line-subtle);background:var(--ground-3);
+  transition:background var(--t-hover) ease-out,border-color var(--t-hover) ease-out,color var(--t-hover) ease-out}
+.btn:hover{background:#1a2432;border-color:var(--line-strong);color:var(--text-primary)}
+.btn:active{box-shadow:inset 0 2px 0 rgba(0,0,0,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-commit{background:var(--signal-live);border-color:var(--signal-live);color:var(--text-inverse)}
+.btn-commit:hover{background:#e14ff2;border-color:#e14ff2;color:var(--text-inverse)}
+.btn-pass{background:var(--signal-pass);border-color:var(--signal-pass);color:var(--text-inverse)}
+.btn-pass:hover{background:#98f7d1;border-color:#98f7d1;color:var(--text-inverse)}
+.btn-danger{background:transparent;border-color:var(--stop-30);color:var(--signal-stop)}
+.btn-danger:hover{background:var(--stop-08);border-color:var(--signal-stop);color:var(--signal-stop)}
+.btn-ghost{background:transparent;border-color:transparent}
+.btn-ghost:hover{background:var(--ground-3);border-color:var(--line-subtle)}
+.btn-sm{padding:3px 9px;font-size:13px;font-weight:600}
+
+.input{width:100%;border:1px solid var(--line-subtle);border-radius:var(--radius-0);background:var(--ground-1);
+  padding:7px 10px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;
+  transition:border-color var(--t-focus) ease-out,box-shadow var(--t-focus) ease-out}
+.input:focus{border-color:var(--live-52);box-shadow:inset 0 0 0 1px var(--live-30)}
+.input:disabled{opacity:.6;cursor:not-allowed;background-color:var(--ground-0);
+  background-image:repeating-conic-gradient(rgba(154,180,209,.06) 0% 25%, transparent 0% 50%);background-size:2px 2px}
+.input::placeholder{color:var(--text-muted)}
+textarea.input{resize:vertical;font-family:var(--font-mono);font-size:12px;min-height:64px}
+select.input{appearance:none;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 55%,calc(100% - 10px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:28px}
+.field{display:block}
+.field .lbl{margin-bottom:5px}
+.field + .field{margin-top:var(--space-3)}
+.field-note{display:block;margin-top:4px;font-size:13px;color:var(--text-muted)}
+/* Wide form grids — long contract instruments spread across columns */
+.form-grid{display:grid;gap:var(--space-3)}
+.form-grid .field + .field{margin-top:0}
+.form-grid .field{min-width:0}
+
+/* Segmented mode switch — machine-state change, not a soft toggle */
+.seg{display:inline-flex;border:1px solid var(--line-subtle);background:var(--ground-1)}
+.seg button{border:none;background:none;color:var(--text-muted);font-family:var(--font-mono);font-size:13px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;
+  border-right:1px solid var(--line-subtle);transition:background var(--t-focus) ease-out,color var(--t-focus) ease-out,box-shadow var(--t-focus) ease-out}
+.seg button:last-child{border-right:none}
+.seg button:hover{color:var(--text-secondary);background:var(--ground-3)}
+.seg button.on{background:var(--ground-3);color:var(--text-primary);text-shadow:var(--glow-text-live);box-shadow:inset 0 -2px 0 var(--signal-live)}
+
+/* Key/value evidence row */
+.kv{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);font-size:12px}
+.kv .k{color:var(--text-muted)}
+.kv .v{font-family:var(--font-mono);font-size:13px;color:var(--text-secondary)}
+
+/* ============================================================
+   6. MOTION SYSTEM — families from DESIGN_LANGUAGE_MOTION.md
+   ============================================================ */
+/* lock-primary: hard-out snap, no softness */
+.fx-lock{animation:lock-primary-hit var(--t-focus) var(--ease-hard) both}
+@keyframes lock-primary-hit{
+  0%{transform:translateY(2px) scale(.985);box-shadow:inset 0 0 0 0 rgba(212,18,233,0)}
+  100%{transform:translateY(0) scale(1);box-shadow:inset 0 0 0 2px var(--live-52)}
+}
+/* commit-structural: firmer settle with completion lock-in */
+.fx-commit{animation:commit-structural-settle 170ms var(--ease-settle) both}
+@keyframes commit-structural-settle{
+  0%{transform:scale(.985);border-color:rgba(123,242,192,.28)}
+  100%{transform:scale(1);border-color:var(--pass-58)}
+}
+/* alarm-hard: one controlled interruption, then held blocked state */
+.fx-alarm-hard{animation:alarm-hard-strike 150ms linear both}
+@keyframes alarm-hard-strike{
+  0%{transform:translateX(0);border-color:rgba(255,127,149,.22)}
+  30%{transform:translateX(-2px);border-color:rgba(255,127,149,.85)}
+  100%{transform:translateX(0);border-color:var(--stop-58)}
+}
+/* alarm-soft: restrained caution emphasis */
+.fx-alarm-soft{animation:alarm-soft-caution var(--t-commit) cubic-bezier(.2,.8,.28,1) both}
+@keyframes alarm-soft-caution{
+  0%{border-color:rgba(255,217,77,.28);background-color:rgba(255,217,77,0)}
+  100%{border-color:rgba(255,217,77,.72);background-color:var(--warn-08)}
+}
+/* disclose-inline: tight mechanical reveal */
+.fx-disclose{animation:disclose-inline-open 190ms cubic-bezier(.2,.78,.28,1) both;transform-origin:top}
+@keyframes disclose-inline-open{
+  0%{opacity:0;transform:translateY(-4px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+/* transit / disclose-structural: staged system reconfiguration */
+.fx-transit{animation:transit-structural-swap 220ms var(--ease-structural) both}
+@keyframes transit-structural-swap{
+  0%{opacity:0;transform:translateY(8px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+/* trace-stream: emitted, stepped output — new lines only */
+.fx-stream{animation:trace-stream-in 180ms steps(3,end) both}
+@keyframes trace-stream-in{
+  0%{opacity:0;transform:translateY(4px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+/* pending-scan: infrastructural system-check-in-progress */
+.pending-scan{position:relative;overflow:hidden}
+.pending-scan::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent 0%,rgba(212,18,233,.18) 45%,transparent 100%);
+  transform:translateX(-100%);animation:pending-scan-pass 1.1s linear infinite}
+@keyframes pending-scan-pass{to{transform:translateX(100%)}}
+/* pulse: held energized state — runtime-significant surfaces only */
+.pulse-live{animation:runtime-pulse-cyber 1.4s steps(2,end) infinite}
+@keyframes runtime-pulse-cyber{
+  0%,100%{box-shadow:inset 0 0 0 2px rgba(212,18,233,.45)}
+  50%{box-shadow:inset 0 0 0 2px rgba(212,18,233,.7)}
+}
+.pulse-warn{animation:gate-pulse-warn 1.4s steps(2,end) infinite}
+@keyframes gate-pulse-warn{
+  0%,100%{box-shadow:inset 0 0 0 2px rgba(255,217,77,.4)}
+  50%{box-shadow:inset 0 0 0 2px rgba(255,217,77,.66)}
+}
+/* trace-flow: directional artifact travel on live edges */
+.edge-flow{stroke-dasharray:10 8;animation:trace-flow-circuit 900ms linear infinite}
+@keyframes trace-flow-circuit{to{stroke-dashoffset:-18}}
+
+/* ============================================================
+   6b. SIGNAL DISTORTION LAYER — glitch / dither / radio / CRT
+   Tier 1: state-tied (failure, stale, pending, degraded, live)
+   Tier 2: ambient CRT at threshold intensity (stage ground, boot)
+   Legibility always wins — every loop is bound to real state.
+   ============================================================ */
+
+/* CRT overlay — aperture grille + vignette + faint phosphor. Stage-level only. */
+.crt-layer{position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:
+    radial-gradient(60% 40% at 50% 28%, rgba(212,18,233,.04), transparent 70%),
+    radial-gradient(120% 92% at 50% 44%, transparent 58%, rgba(0,0,0,.5) 100%),
+    repeating-linear-gradient(90deg,
+      rgba(255,60,90,.022) 0 1px,
+      rgba(90,255,170,.016) 1px 2px,
+      rgba(80,160,255,.022) 2px 3px)}
+
+/* CRT power-on — first mount only, horizontal line expands to full frame */
+.crt-boot{animation:crt-power-on 520ms var(--ease-structural) both;transform-origin:50% 50%}
+@keyframes crt-power-on{
+  0%{transform:scaleY(.004);opacity:0;filter:brightness(3.2) saturate(.2)}
+  30%{transform:scaleY(.004);opacity:1;filter:brightness(3.2) saturate(.2)}
+  70%{transform:scaleY(1.012);opacity:1;filter:brightness(1.4)}
+  100%{transform:scaleY(1);filter:brightness(1) saturate(1)}
+}
+
+/* glitch-strike — alarm-hard companion: one RGB-split interruption, then held */
+.fx-glitch{animation:glitch-strike 180ms steps(2,end) both}
+@keyframes glitch-strike{
+  0%{transform:translate(0);filter:none}
+  25%{transform:translate(-2px,0);filter:drop-shadow(2px 0 0 rgba(255,40,80,.55)) drop-shadow(-2px 0 0 rgba(64,200,255,.55))}
+  50%{transform:translate(2px,-1px);filter:drop-shadow(-2px 0 0 rgba(255,40,80,.5)) drop-shadow(2px 0 0 rgba(64,200,255,.5))}
+  75%{transform:translate(-1px,1px);filter:drop-shadow(1px 0 0 rgba(255,40,80,.35)) drop-shadow(-1px 0 0 rgba(64,200,255,.35))}
+  100%{transform:translate(0);filter:none}
+}
+
+/* frame-tear — single tear for stale / outdated reveals, then whole again */
+.fx-tear{animation:frame-tear 220ms steps(3,end) both}
+@keyframes frame-tear{
+  0%{clip-path:inset(0);transform:translateX(0)}
+  33%{clip-path:inset(8% 0 52% 0);transform:translateX(3px)}
+  66%{clip-path:inset(52% 0 8% 0);transform:translateX(-3px)}
+  100%{clip-path:inset(0);transform:translateX(0)}
+}
+
+/* dither — material texture for inactive, empty, or dead-channel matter */
+.dither{background-image:
+    repeating-conic-gradient(rgba(154,180,209,.07) 0% 25%, transparent 0% 50%),
+    repeating-conic-gradient(rgba(154,180,209,.045) 0% 25%, transparent 0% 50%);
+  background-size:2px 2px,6px 6px;background-position:0 0,1px 2px}
+.static-field{animation:static-crawl .5s steps(3,end) infinite}
+@keyframes static-crawl{
+  0%{background-position:0 0,1px 2px}
+  50%{background-position:1px 1px,-2px 3px}
+  100%{background-position:-1px 2px,2px -1px}
+}
+
+/* interference — radio bands over any pending-scan surface */
+.pending-scan::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.7;
+  background:repeating-linear-gradient(0deg,transparent 0 6px,rgba(212,18,233,.05) 6px 7px);
+  animation:interference 1.7s steps(6,end) infinite}
+@keyframes interference{
+  0%{transform:translate(0,0)}
+  40%{transform:translate(-1px,2px)}
+  70%{transform:translate(1px,-2px)}
+  100%{transform:translate(0,1px)}
+}
+
+/* stream-hold — horizontal-hold shimmer, only while genuinely streaming */
+.stream-hold{animation:h-hold 2.8s steps(1,end) infinite}
+@keyframes h-hold{
+  0%,91%,100%{transform:translateX(0)}
+  92%{transform:translateX(.7px)}
+  95%{transform:translateX(-.7px)}
+  97%{transform:translateX(.4px)}
+}
+
+/* sig-flicker — signal-strength dropout for degraded readiness */
+.sig-flicker{animation:sig-flicker 2.2s steps(1,end) infinite}
+@keyframes sig-flicker{
+  0%,87%,100%{opacity:1}
+  89%{opacity:.5}
+  92%{opacity:.85}
+  94%{opacity:.45}
+  96%{opacity:1}
+}
+
+/* carrier — thin wave riding a held human gate */
+.carrier{position:relative;overflow:hidden}
+.carrier::after{content:"";position:absolute;top:50%;left:-40%;width:60%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,217,77,.75),transparent);
+  animation:carrier-wave 2.4s linear infinite}
+@keyframes carrier-wave{to{transform:translateX(300%)}}
+
+/* Reduced motion — family-aware: keep state changes, kill loops + travel */
+@media (prefers-reduced-motion: reduce){
+  .pending-scan::after,.pending-scan::before,.pulse-live,.pulse-warn,.edge-flow,
+  .static-field,.stream-hold,.sig-flicker,.carrier::after{animation:none!important}
+  .pulse-live{box-shadow:inset 0 0 0 2px var(--live-52)}
+  .pulse-warn{box-shadow:inset 0 0 0 2px var(--warn-52)}
+  .fx-lock,.fx-commit,.fx-alarm-hard,.fx-alarm-soft,.fx-disclose,.fx-transit,.fx-stream,
+  .fx-glitch,.fx-tear,.crt-boot{animation-duration:1ms!important}
+}
+
+/* ============================================================
+   7. LIBRARY SHELL
+   ============================================================ */
+.shell{display:grid;grid-template-columns:var(--sb-w) 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line-subtle);background:var(--ground-1)}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 12px;border-bottom:1px solid var(--line-subtle)}
+.brand .mark{position:relative;height:34px;width:34px;flex:none;display:grid;place-items:center;border:1px solid var(--line-strong);
+  background:var(--ground-2);color:var(--text-primary);font-family:var(--font-mono);font-weight:700;font-size:15px}
+.brand .mark::after{content:"";position:absolute;top:2px;right:2px;width:6px;height:6px;border-top:2px solid var(--signal-live);border-right:2px solid var(--signal-live)}
+.brand h1{font-size:13px;font-weight:800;margin:0;color:var(--text-primary);letter-spacing:.02em}
+.brand p{margin:1px 0 0;font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-muted)}
+.filter{padding:12px;border-bottom:1px solid var(--line-subtle)}
+.filter .input{font-family:var(--font-mono);font-size:13px}
+.nav-group h2{font-family:var(--font-mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);
+  margin:0;padding:12px 16px 4px;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;border-left:2px solid transparent;
+  padding:6px 16px 6px 14px;color:var(--text-muted);font-size:12.5px;cursor:pointer;
+  transition:background var(--t-hover) ease-out,color var(--t-hover) ease-out,border-color var(--t-hover) ease-out}
+.nav-item:hover{background:var(--ground-2);color:var(--text-secondary)}
+.nav-item.active{background:var(--ground-2);color:var(--text-primary);border-left-color:var(--signal-live)}
+.nav-item .idx{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);width:22px;flex:none}
+.nav-item.active .idx{color:var(--text-primary);text-shadow:var(--glow-text-live)}
+.sidebar .foot{padding:16px;font-size:13px;color:var(--text-muted);line-height:1.7;border-top:1px solid var(--line-subtle);margin-top:12px}
+.sidebar .foot code{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+  padding:14px 24px;border-bottom:1px solid var(--line-subtle);background:var(--ground-1)}
+.topbar .crumb{font-family:var(--font-mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-muted)}
+.topbar h3{margin:3px 0 0;font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--text-primary)}
+.topbar .desc{font-size:12px;color:var(--text-secondary);margin-top:3px;max-width:72ch}
+.topbar .srcref{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);white-space:nowrap;text-align:right;line-height:1.8}
+
+.stagewrap{flex:1;padding:20px 24px 28px;display:flex;flex-direction:column;gap:14px}
+.stage{position:relative;border:1px solid var(--line-subtle);background:var(--ground-0);padding:28px;min-height:220px;overflow:auto}
+.stage-inner{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.bench{border:1px solid var(--line-subtle);background:var(--ground-2);padding:12px 16px}
+.bench h4{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);font-weight:600}
+.ctl-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctl-note{margin-top:10px;font-size:12px;color:var(--text-muted);max-width:100ch}
+.specstrip{border:1px solid var(--line-subtle);border-left:2px solid var(--live-30);background:var(--ground-1);padding:10px 16px;
+  display:flex;flex-wrap:wrap;gap:6px 24px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
+.specstrip b{color:var(--text-secondary);font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-right:6px}
+.specstrip .tok{color:var(--text-primary);text-shadow:var(--glow-text-live)}
+.specstrip .fam{color:var(--signal-stale)}
+
+/* Annunciator — bottom event line */
+.annunciator{position:fixed;left:calc(var(--sb-w) + 24px);bottom:16px;z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--ground-1);border:1px solid var(--line-strong);border-left:2px solid var(--signal-live);
+  padding:7px 12px;font-family:var(--font-mono);font-size:13px;color:var(--text-primary);
+  opacity:0;transform:translateY(4px);transition:opacity var(--t-focus) ease-out,transform var(--t-focus) ease-out;pointer-events:none}
+.annunciator.show{opacity:1;transform:translateY(0)}
+.annunciator::before{content:"EVENT";font-size:11px;letter-spacing:.2em;color:var(--text-primary);text-shadow:var(--glow-text-live)}
+
+/* First-mount boot reveal (staggered entrance: first mount only) */
+.boot{animation:transit-structural-swap 220ms var(--ease-structural) both}
+.boot-1{animation-delay:40ms}.boot-2{animation-delay:80ms}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto}
+  .annunciator{left:16px}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="sidebar boot">
+    <div class="brand">
+      <div class="mark">H</div>
+      <div><h1>Hephaestus</h1><p>Component library</p></div>
+    </div>
+    <div class="filter"><input id="filter" class="input" type="text" placeholder="FILTER COMPONENTS" autocomplete="off" aria-label="Filter components"></div>
+    <div id="nav"></div>
+    <div class="foot">
+      Canonical reference build of the design language. Every unit maps to
+      tokens in <code>DESIGN.md</code> and rules in <code>DESIGN_LANGUAGE_*.md</code>.
+      <br><br>
+      Authority order: language docs &gt; <code>DESIGN.md</code> &gt; this file.
+      The old <code>component-gallery.html</code> is exploration only.
+    </div>
+  </nav>
+
+  <main class="main crt-boot">
+    <header class="topbar boot boot-1">
+      <div>
+        <div class="crumb" id="crumb">—</div>
+        <h3 id="title">—</h3>
+        <div class="desc" id="desc"></div>
+      </div>
+      <div class="srcref" id="srcref"></div>
+    </header>
+    <div class="stagewrap boot boot-2">
+      <div class="stage grid-ground hud"><div class="stage-inner" id="stage"></div><div class="crt-layer"></div></div>
+      <div class="specstrip" id="spec"></div>
+      <div class="bench">
+        <h4>Control bench</h4>
+        <div class="ctl-row" id="ctl"></div>
+        <div class="ctl-note" id="ctlnote"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="annunciator" id="annunciator" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+const $=(s,r)=>(r||document).querySelector(s);
+const h=(html)=>{const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild;};
+const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function announce(msg){
+  const f=$('#annunciator');
+  f.classList.add('show');
+  clearTimeout(announce._t);clearInterval(announce._s);
+  /* character-scramble settle — radio tuning into the event line */
+  const GL='█▓▒░<>/\\|=+*#';
+  let step=0;
+  f.textContent=msg.split('').map((ch,i)=>ch===' '?ch:GL[(i*7)%GL.length]).join('');
+  announce._s=setInterval(()=>{
+    step++;
+    if(step>3){clearInterval(announce._s);f.textContent=msg;return;}
+    f.textContent=msg.split('').map((ch,i)=>((i+step)%(step+2)===0&&ch!==' ')?GL[(i*7+step*3)%GL.length]:ch).join('');
+  },45);
+  announce._t=setTimeout(()=>f.classList.remove('show'),1600);
+}
+
+/* Segmented-control helper: opts=[{key,label}], cb(key) — returns element */
+function segCtl(opts,activeKey,cb){
+  const el=h(`<div class="seg" role="group">${opts.map(o=>`<button data-k="${o.key}" class="${o.key===activeKey?'on':''}">${o.label}</button>`).join('')}</div>`);
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    el.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));cb(b.dataset.k);});
+  return el;
+}
+
+/* ---- shared mock data (mirrors runtime shapes) ---- */
+const RULES=[
+  {id:'G-001',name:'Agent must not write outside its allowed paths',short:'Path scope'},
+  {id:'G-002',name:'Run must use the contracted model',short:'Model lock'},
+  {id:'G-003',name:'Enforced skill obligations must emit completion markers',short:'Skill proof'}];
+const CATALOG={providers:[
+  {provider:'claude',models:[{id:'claude-opus-4-8',label:'Opus 4.8',efforts:['low','medium','high']},{id:'claude-sonnet-5',label:'Sonnet 5',efforts:['low','medium','high']}]},
+  {provider:'codex',models:[{id:'gpt-5-codex',label:'GPT-5 Codex',efforts:['low','high']}]}]};
+const ARTIFACTS=[
+  {artifact_id:'artifact-001',name:'PRD Spec',tags:['product'],headings:[{heading:'Problem Statement',required:true,min_items:null},{heading:'User Stories',required:true,min_items:3}]},
+  {artifact_id:'artifact-002',name:'Release Checklist',tags:['qa','release'],headings:[{heading:'Release Criteria',required:true,min_items:2}]}];
+
+/* ---- shared markup builders ---- */
+const sig=(tone,label)=>`<span class="sig sig-${tone}">${esc(label)}</span>`;
+const sigN=(label)=>`<span class="sig">${esc(label)}</span>`;
+const providerSig=(p)=>p==='claude'?sig('live','claude'):p==='codex'?sig('pass','codex'):sigN(p);
+const tagChips=(tags)=>(tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('');
+const serial=(s)=>`<span class="marker-serial">${esc(s)}</span>`;
+
+/* ============================================================
+   COMPONENT REGISTRY
+   each: {id, group, title, desc, src, spec:{tokens,motion,copy}, mount(stage,ctl,note)}
+   ============================================================ */
+const C=[];
+const add=(o)=>C.push(o);
+
+/* ================= FOUNDATIONS ================= */
+add({id:'tokens',group:'Foundations',title:'Color & surface tokens',desc:'The token layer from DESIGN.md rendered live: the surface ladder (ground → shell → panel → card), structural lines, text roles, and the five signal colors with their semantics.',src:'DESIGN.md — token foundation',
+  spec:{tokens:['ground-0..3','line-subtle/strong/critical','text-primary..inverse','signal-live/pass/warn/stop/stale'],copy:'signals carry meaning, not mood'},
+  mount(stage){
+    const sw=(name,css,note)=>`<div style="width:150px;border:1px solid var(--line-subtle)">
+      <div style="height:52px;background:${css};border-bottom:1px solid var(--line-subtle)"></div>
+      <div style="padding:7px 9px"><div class="mono" style="font-size:12px;color:var(--text-primary)">${name}</div><div class="mono muted" style="font-size:11px;margin-top:2px">${note||css}</div></div></div>`;
+    stage.append(h(`<div class="stack" style="width:100%">
+      <div><span class="lbl" style="margin-bottom:8px">Surface ladder — each step brighter, more bounded</span>
+        <div class="row" style="flex-wrap:wrap;gap:10px">
+          ${sw('--ground-0','#05070a','ground / canvas field')}${sw('--ground-1','#090d13','shell / rails')}${sw('--ground-2','#0e141d','panel')}${sw('--ground-3','#141c27','card / raised')}
+        </div></div>
+      <div><span class="lbl" style="margin-bottom:8px">Structural lines</span>
+        <div class="row" style="flex-wrap:wrap;gap:10px">
+          ${sw('--line-subtle','rgba(154,180,209,.14)','1px frame + dividers')}${sw('--line-strong','rgba(203,225,244,.34)','2px emphasis')}${sw('--line-critical','rgba(255,127,149,.55)','blocked / failing')}
+        </div></div>
+      <div><span class="lbl" style="margin-bottom:8px">Signals — semantic only, sparse on the neutral field</span>
+        <div class="row" style="flex-wrap:wrap;gap:10px">
+          ${sw('--signal-live','#D412E9','active · selected · live')}${sw('--signal-pass','#7bf2c0','confirmed · passed · flowing')}${sw('--signal-warn','#ffd94d','caution · waiting human')}${sw('--signal-stop','#ff7f95','blocked · failed · violation')}${sw('--signal-stale','#b5b6ff','stale · pinned · versioned')}
+        </div></div>
+      <div><span class="lbl" style="margin-bottom:8px">Text roles</span>
+        <div class="card" style="padding:12px 14px;max-width:560px">
+          <div style="color:var(--text-primary);font-size:14px;font-weight:700">text-primary — important content, cold white</div>
+          <div style="color:var(--text-secondary);font-size:13px;margin-top:4px">text-secondary — readable supporting content</div>
+          <div style="color:var(--text-muted);font-size:12px;margin-top:4px">text-muted — dim operational metadata</div>
+          <div style="margin-top:8px"><span style="background:var(--signal-live);color:var(--text-inverse);font-weight:700;font-size:13px;padding:2px 8px">text-inverse on signal fill</span></div>
+        </div></div>
+    </div>`));
+  }});
+
+add({id:'typography',group:'Foundations',title:'Typography roles',desc:'Type as system voice: Archivo for operational hierarchy, IBM Plex Mono for everything machine-owned — ids, paths, contracts, traces, metadata. Labels are small, uppercase, tracked wide.',src:'DESIGN_LANGUAGE_VISUAL.md — typography',
+  spec:{tokens:['font-sans','font-mono','type-display','type-title','type-label','type-body','type-meta']},
+  mount(stage){
+    stage.append(h(`<div class="panel" style="width:min(680px,100%);padding:20px">
+      <div class="stack" style="gap:18px">
+        <div><span class="lbl">type-display — hero surface title</span>
+          <div class="type-display" style="font-size:26px;margin-top:4px">Workflow command center</div></div>
+        <div><span class="lbl">type-title — section and panel titles</span>
+          <div class="type-title" style="margin-top:4px">Produced Artifacts</div></div>
+        <div><span class="lbl">type-label — compact uppercase operational label</span>
+          <div style="margin-top:6px" class="row"><span class="lbl" style="margin:0">Node contract</span><span class="lbl" style="margin:0">Gate checklist</span><span class="lbl" style="margin:0">Preflight</span></div></div>
+        <div><span class="lbl">type-body — dense readable system copy</span>
+          <div style="margin-top:4px;max-width:60ch">The producer owns the output artifact spec. Fan-out preserves one artifact identity with separate edge instances and control states.</div></div>
+        <div><span class="lbl">type-meta — machine-owned values default to mono</span>
+          <div class="mono" style="margin-top:4px;font-size:13px;color:var(--text-secondary)">run-042 · step-03 · artifact-brief-001 · frontend/src/components/ui.jsx</div></div>
+      </div>
+    </div>`));
+  }});
+
+add({id:'motion',group:'Foundations',title:'Motion families',desc:'The core one-shot and persistent motion families as live CSS. One-shot motion communicates change; persistent motion is reserved for runtime-significant state. Bounce, elastic overshoot, and breathing are banned.',src:'DESIGN_LANGUAGE_MOTION.md — families + timing bands',
+  spec:{motion:['lock-primary 90-140ms','commit-structural 140-180ms','alarm-hard 150ms','disclose-inline 190ms','pending-scan loop','pulse loop','trace-stream 180ms']},
+  mount(stage,ctl,note){
+    const demos=[
+      {k:'fx-lock',name:'lock-primary',d:'primary selection acquisition — hard snap'},
+      {k:'fx-commit',name:'commit-structural',d:'consequential completion — firm settle'},
+      {k:'fx-alarm-hard',name:'alarm-hard',d:'hard stop — one strike, then held'},
+      {k:'fx-alarm-soft',name:'alarm-soft',d:'caution — restrained emphasis'},
+      {k:'fx-disclose',name:'disclose-inline',d:'local evidence reveal'},
+      {k:'fx-stream',name:'trace-stream',d:'emitted output line'}];
+    const wrap=h(`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:min(860px,100%)"></div>`);
+    demos.forEach(dm=>{
+      const cell=h(`<button class="card" style="padding:14px;text-align:left;cursor:pointer;border-width:2px">
+        <span class="lbl" style="margin-bottom:6px">${dm.name}</span>
+        <span style="font-size:12px;color:var(--text-secondary)">${dm.d}</span>
+        <span class="type-meta" style="display:block;margin-top:8px;color:var(--text-primary);text-shadow:var(--glow-text-live)">click to fire</span></button>`);
+      cell.onclick=()=>{cell.classList.remove(dm.k);void cell.offsetWidth;cell.classList.add(dm.k);};
+      wrap.append(cell);
+    });
+    stage.append(wrap);
+    stage.append(h(`<div class="stack" style="width:min(860px,100%)">
+      <div class="card pending-scan" style="padding:12px 14px"><span class="lbl" style="margin:0">pending-scan — provider connecting / preflight recompute</span></div>
+      <div class="card pulse-live" style="padding:12px 14px"><span class="lbl" style="margin:0">pulse — active runtime node (persistent, runtime-only)</span></div>
+    </div>`));
+    note.textContent='One-shot families fire on user cause; loops (pending-scan, pulse) mark unresolved or live state only, never chrome. Reduced-motion keeps state changes and removes loops.';
+  }});
+
+add({id:'distortion',group:'Foundations',title:'Signal distortion layer',desc:'Glitch, dither, radio distortion, and CRT texture as a governed system. Tier 1 is state-tied: failure glitches, stale tears, pending interference, degraded flicker, held-gate carrier waves, dead-channel dither. Tier 2 is the ambient CRT layer on stage grounds and the one-time power-on boot. Legibility always wins.',src:'DESIGN_LANGUAGE_VISUAL.md + MOTION.md — signal distortion layer',
+  spec:{tokens:['crt-layer','dither','static-field'],motion:['glitch-strike (alarm-hard)','frame-tear (stale)','interference (pending)','sig-flicker (degraded)','carrier-wave (held gate)','stream-hold (live)','crt-power-on (first mount)'],copy:'distortion encodes signal quality, never decoration'},
+  mount(stage,ctl,note){
+    const fire=(k,name,d)=>{
+      const cell=h(`<button class="card" style="padding:14px;text-align:left;cursor:pointer;border-width:2px">
+        <span class="lbl" style="margin-bottom:6px">${name}</span>
+        <span style="font-size:12px;color:var(--text-secondary)">${d}</span>
+        <span class="type-meta" style="display:block;margin-top:8px;color:var(--text-primary);text-shadow:var(--glow-text-live)">click to fire</span></button>`);
+      cell.onclick=()=>{cell.classList.remove(k);void cell.offsetWidth;cell.classList.add(k);};
+      return cell;
+    };
+    const oneShots=h(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(860px,100%)"></div>`);
+    oneShots.append(fire('fx-glitch','glitch-strike','hard failure — one RGB-split interruption, then held. Never loops.'));
+    oneShots.append(fire('fx-tear','frame-tear','stale / outdated reveal — a single tear, then whole again.'));
+    stage.append(oneShots);
+    stage.append(h(`<div class="stack" style="width:min(860px,100%)">
+      <div class="card pending-scan" style="padding:12px 14px"><span class="lbl" style="margin:0;position:relative;z-index:2">pending-scan + interference — unresolved system check</span></div>
+      <div class="stripe-caution carrier" style="padding:10px 14px"><span class="mono" style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal-warn);position:relative;z-index:2">carrier wave — human gate holding</span></div>
+      <div class="card" style="padding:12px 14px"><div class="kv"><span class="lbl" style="margin:0">sig-flicker — degraded readiness</span><span class="sig sig-warn sig-flicker">degraded</span></div></div>
+      <div class="card dither" style="padding:12px 14px"><span class="lbl" style="margin:0">dither — inactive / empty / dead-channel material</span></div>
+      <div class="card dither static-field" style="padding:12px 14px"><span class="lbl" style="margin:0;position:relative;z-index:2">static-field — boot / connecting noise crawl</span></div>
+    </div>`));
+    note.textContent='Every loop here is bound to a real state: pending, degraded, held, or booting. Glitch and tear are one-shot interruptions for failure and staleness. The ambient CRT layer (grille + vignette) lives on the stage ground behind this panel, and the power-on reveal fires once per mount. Reduced motion kills all loops and collapses one-shots.';
+  }});
+
+/* ================= PRIMITIVES ================= */
+add({id:'statebadge',group:'Primitives',title:'StateBadge',desc:'Issue lifecycle badge mapped to signal semantics. Underscores render as spaces; state color follows meaning, not decoration.',src:'frontend/src/components/ui.jsx — StateBadge',
+  spec:{tokens:['signal-*','ground-3','line-subtle'],copy:'plain operational status words'},
+  mount(stage){
+    const map={OPEN:'',IN_PROGRESS:'live',HANDOFF_PENDING:'warn',QA_PENDING:'stale',DONE:'pass',BLOCKED:'stop'};
+    stage.append(h(`<div class="row" style="flex-wrap:wrap;gap:10px">${Object.entries(map).map(([k,t])=>t?sig(t,k.replace(/_/g,' ')):sigN(k.replace(/_/g,' '))).join('')}</div>`));
+  }});
+
+add({id:'stagepill',group:'Primitives',title:'StageMarker',desc:'Per-stage pipeline marker (Spec / Handoff / Review / QA / Log) in passed / pending / none states. Rectangular, not bubbly; the state dot carries the signal.',src:'frontend/src/components/ui.jsx — StagePill',
+  spec:{tokens:['signal-pass','signal-warn','ground-3'],copy:'Passed / Pending as canonical states'},
+  mount(stage){
+    const pill=(l,st)=>st==='ok'?sig('pass',l):st==='pending'?sig('warn',l):`<span class="sig" style="opacity:.55">${l}</span>`;
+    stage.append(h(`<div class="row" style="gap:6px;flex-wrap:wrap">${pill('Spec','ok')}${pill('Handoff','ok')}${pill('Review','pending')}${pill('QA','none')}${pill('Log','none')}</div>`));
+  }});
+
+add({id:'statcard',group:'Primitives',title:'StatCard',desc:'Big-number summary tile with semantic tone and tabular figures. The frame escalates before the color does: critical counts get the strong border.',src:'frontend/src/components/ui.jsx — StatCard',
+  spec:{tokens:['ground-3','line-strong','signal-*','type-label'],copy:'high-information nouns as labels'},
+  mount(stage){
+    const card=(l,v,tone,strong)=>`<div class="card${strong?' fx-alarm-hard fx-glitch':''}" style="padding:14px 18px;min-width:150px;${strong?'border-color:var(--stop-58)':''}">
+      <span class="lbl">${l}</span>
+      <div class="mono" style="margin-top:4px;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;color:${tone}">${v}</div></div>`;
+    stage.append(h(`<div class="row" style="gap:12px;flex-wrap:wrap">
+      ${card('Issues','216','var(--text-primary)')}
+      ${card('Passed','214','var(--signal-pass)')}
+      ${card('Waiting','3','var(--signal-warn)')}
+      ${card('Failed','1','var(--signal-stop)',true)}
+    </div>`));
+  }});
+
+add({id:'pills',group:'Primitives',title:'Identity markers',desc:'Provider signals, tag chips, serial marks, and status markers — the small identity system repeated across every surface. Providers use signal tones; tags stay neutral; serials use the forge-stamp mark.',src:'DESIGN_LANGUAGE_VISUAL.md — icons, markers, labels',
+  spec:{tokens:['sig','chip','marker-serial'],copy:'artifact stays the canonical noun'},
+  mount(stage){
+    stage.append(h(`<div class="stack" style="gap:14px">
+      <div><span class="lbl" style="margin-bottom:6px">Provider signals</span><div class="row" style="gap:8px">${providerSig('claude')}${providerSig('codex')}${sigN('idle')}</div></div>
+      <div><span class="lbl" style="margin-bottom:6px">Tag chips</span><div class="row" style="gap:6px">${tagChips(['architect','review','builtin'])}</div></div>
+      <div><span class="lbl" style="margin-bottom:6px">Typed chips</span><div class="row" style="gap:6px"><span class="chip"><span class="ty">filter</span>Runtime blockers</span><span class="chip"><span class="ty">artifact</span>brief_revision</span><span class="chip"><span class="ty">skill</span>tdd<button class="x">×</button></span></div></div>
+      <div><span class="lbl" style="margin-bottom:6px">Serial / provenance marks</span><div class="row" style="gap:8px">${serial('artifact-001 · v4')}${serial('run-042 / step-03')}${serial('FR-019')}</div></div>
+    </div>`));
+  }});
+
+/* ================= SHELL ================= */
+add({id:'header',group:'Shell',title:'App header + nav',desc:'Global frame: mark, workspace path, view switch, and the live/preview indicator. The mode switch is a machine-state change — inset signal bar, no soft toggle.',src:'frontend/src/App.jsx — header',
+  spec:{tokens:['ground-1','line-subtle','seg','signal-pass'],motion:['lock-primary on tab acquire']},
+  mount(stage,ctl){
+    const el=h(`<div style="width:100%;border:1px solid var(--line-subtle)">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--ground-1)">
+        <div class="row" style="gap:12px">
+          <div class="brand" style="padding:0;border:none"><div class="mark">H</div></div>
+          <div><div style="font-size:13px;font-weight:800;color:var(--text-primary)">Hephaestus</div><div class="mono muted" style="font-size:12px">/Projects/hephustus</div></div>
+        </div>
+        <div class="row" style="gap:16px">
+          <nav class="seg" id="hnav">${['canvas','library','code','agent'].map((v,i)=>`<button data-v="${v}" class="${i===0?'on':''}">${v}</button>`).join('')}</nav>
+          <span class="row" style="gap:6px"><span id="hsig" class="sig sig-pass">live</span></span>
+        </div>
+      </header></div>`);
+    el.querySelector('#hnav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+      el.querySelectorAll('#hnav button').forEach(x=>x.classList.toggle('on',x===b));
+      b.classList.remove('fx-lock');void b.offsetWidth;b.classList.add('fx-lock');});
+    stage.append(el);
+    ctl.append(segCtl([{key:'live',label:'live'},{key:'preview',label:'preview'}],'live',k=>{
+      el.querySelector('#hsig').outerHTML=k==='live'?'<span id="hsig" class="sig sig-pass">live</span>':'<span id="hsig" class="sig sig-stale">preview</span>';}));
+  }});
+
+add({id:'toast',group:'Shell',title:'Violation toast + correction box',desc:'A violation notification is evidence, not a chat bubble: rule id, scope markers, and a Correct action that opens the correction box. Hard entry via alarm family, held state after.',src:'frontend/src/components/Toast.jsx',
+  spec:{tokens:['card','line-critical','sig-stop','marker-serial'],motion:['alarm-hard entry','commit-structural on save'],copy:'Correction promoted to frozen rule'},
+  mount(stage,ctl,note){
+    let sev='stop';
+    function render(){
+      stage.innerHTML='';
+      const tones={stop:['sig-stop','Violation','fx-alarm-hard fx-glitch','var(--stop-58)'],warn:['sig-warn','Caution','fx-alarm-soft','var(--warn-52)'],live:['sig-live','System','fx-disclose','var(--live-30)'],pass:['sig-pass','Passed','fx-commit','var(--pass-30)']};
+      const [cls,word,fx,bc]=tones[sev];
+      const t=h(`<div class="card ${fx}" style="width:340px;padding:14px;border-left:2px solid ${bc}">
+        <div class="row" style="gap:8px;margin-bottom:8px"><span class="sig ${cls}">${word}</span>${serial('G-001')}</div>
+        <p style="margin:0 0 10px;font-size:13px;color:var(--text-primary)">Write outside allowed paths: <span class="mono" style="font-size:13px">frontend/src</span> touched but not in scope.</p>
+        <div class="row" style="gap:6px;margin-bottom:12px">${serial('issue-029')}${serial('node-004')}</div>
+        <div class="row" style="gap:8px">
+          <button class="btn btn-sm" id="corr" style="flex:1;border-color:var(--pass-30);color:var(--signal-pass)">Correct →</button>
+          <button class="btn btn-ghost btn-sm" id="dis">Dismiss</button>
+        </div></div>`);
+      t.querySelector('#dis').onclick=()=>{t.style.opacity='.35';announce('Toast dismissed — local UI dismissal only');};
+      t.querySelector('#corr').onclick=()=>openCorrection();
+      stage.append(t);
+    }
+    function openCorrection(){
+      const m=h(`<div style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(3,5,8,.72);z-index:20">
+        <div class="panel frame-plate fx-transit" style="width:min(440px,92%);padding:20px">
+          <div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="type-title">Correction</span><span class="lbl" style="margin:0">rework record</span></div>
+          <div class="spec-sheet" style="padding:10px 12px;font-size:12px;margin-bottom:14px;display:flex;flex-direction:column;gap:6px">
+            <div class="kv"><span class="k">Rule</span><span class="v">G-001 — path scope</span></div>
+            <div class="kv"><span class="k">Node</span><span class="v">node-004</span></div>
+            <div class="kv"><span class="k">Violation</span><span class="v">write outside allowed paths</span></div>
+          </div>
+          <label class="field"><span class="lbl">Correction note</span><textarea class="input" rows="4" placeholder="State what should have happened."></textarea></label>
+          <div class="row" style="gap:8px;margin-top:14px"><button class="btn btn-commit" id="save" style="flex:1">Save correction</button><button class="btn btn-ghost" id="cx">Cancel</button></div>
+        </div></div>`);
+      m.querySelector('#cx').onclick=()=>m.remove();
+      m.querySelector('#save').onclick=()=>{m.remove();announce('Correction saved — candidate created');};
+      stage.closest('.stage').append(m);
+    }
+    ctl.append(segCtl([{key:'stop',label:'violation'},{key:'warn',label:'caution'},{key:'live',label:'system'},{key:'pass',label:'passed'}],'stop',k=>{sev=k;render();}));
+    note.textContent='Violation entry uses alarm-hard once, then holds. Correct opens the modal correction box; Save commits with commit-structural.';
+    render();
+  }});
+
+add({id:'splash',group:'Shell',title:'Boot splash',desc:'Shown while the desktop core is connecting, before the first state snapshot arrives. Pending-scan marks it as a system check in progress, not a brand animation.',src:'frontend/src/App.jsx — splash',
+  spec:{tokens:['ground-0','type-meta'],motion:['pending-scan']},
+  mount(stage){
+    stage.append(h(`<div class="panel pending-scan dither static-field" style="width:min(560px,100%);min-height:160px;display:grid;place-items:center">
+      <div style="text-align:center">
+        <div class="mono" style="font-size:12px;color:var(--text-secondary);letter-spacing:.14em">CONNECTING TO HEPHAESTUS CORE</div>
+        <div class="type-meta" style="margin-top:6px">awaiting first state snapshot</div>
+      </div></div>`));
+  }});
+
+/* ================= WORKFLOW CANVAS ================= */
+add({id:'runtime-shell',group:'Workflow Canvas',title:'Canvas shell + mode frame',desc:'The command center. Author/Run split, live-run snapshot vs draft, mode-aware legend, and concern filters. Run Mode is the default posture; the frame states which snapshot you are looking at before you read anything else.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 1',
+  spec:{tokens:['panel','hud','sig-*','chip','frame-plate'],motion:['transit on mode swap','freeze-shift on snapshot'],copy:'Run Mode / Author Mode / Live Run Snapshot'},
+  mount(stage,ctl,note){
+    let mode='run',legendOpen=true,snapshot='live';
+    function draw(){
+      stage.innerHTML='';
+      const el=h(`<section class="panel hud fx-transit" style="width:min(920px,100%);padding:18px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="min-width:280px">
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              ${mode==='run'?sig('live','Run Mode'):sigN('Author Mode')}
+              ${snapshot==='live'?sig('pass','Live Run Snapshot'):sig('stale','Current Draft')}
+              ${sigN('draft auto-saved')}
+            </div>
+            <div class="type-display" style="margin-top:10px">Workflow command center</div>
+            <div class="muted" style="margin-top:4px;max-width:64ch;font-size:12px">The canvas is the runtime surface. Drafts continue editing beside a frozen live snapshot; runtime controls only exist inside the live frame.</div>
+          </div>
+          <div class="spec-sheet" style="padding:12px 14px;min-width:230px;display:flex;flex-direction:column;gap:8px">
+            <span class="lbl" style="margin:0">Run frame</span>
+            <div class="kv"><span class="k">run</span><span class="v">run-042</span></div>
+            <div class="kv"><span class="k">state</span>${sig('live','streaming')}</div>
+            <div class="kv"><span class="k">graph</span>${snapshot==='live'?sig('stop','locked'):sigN('editable')}</div>
+            <div class="kv"><span class="k">draft</span><span class="v">saved 4s ago</span></div>
+          </div>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <span class="chip"><span class="ty">filter</span>Runtime blockers</span>
+          <span class="chip"><span class="ty">filter</span>Validation issues</span>
+          <span class="chip"><span class="ty">filter</span>Learning candidates</span>
+          <span class="chip"><span class="ty">filter</span>Outdated nodes</span>
+        </div>
+        ${legendOpen?`<div class="card fx-disclose" style="padding:12px 14px">
+          <div class="row" style="justify-content:space-between"><span class="lbl" style="margin:0">Mode-aware legend</span><span class="type-meta">${mode==='run'?'run markers':'author markers'}</span></div>
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">
+            ${sig('live','active')}${sig('stop','blocked')}${sig('pass','passed gate')}${sig('warn','waiting for human')}${sig('stale','outdated')}${sigN('learning candidate')}
+          </div>
+          <div class="type-meta" style="margin-top:8px">Filters dim non-matching graph elements instead of hiding them.</div>
+        </div>`:''}
+      </section>`);
+      stage.append(el);
+    }
+    ctl.append(segCtl([{key:'run',label:'run mode'},{key:'author',label:'author mode'}],'run',k=>{mode=k;draw();}));
+    ctl.append(segCtl([{key:'live',label:'live snapshot'},{key:'draft',label:'draft'}],'live',k=>{snapshot=k;draw();}));
+    ctl.append(segCtl([{key:'open',label:'legend open'},{key:'closed',label:'collapsed'}],'open',k=>{legendOpen=k==='open';draw();}));
+    note.textContent='Run Mode is the default command surface. The snapshot marker and graph-lock signal make live-vs-draft posture readable before any text.';
+    draw();
+  }});
+
+add({id:'wf-toolbar',group:'Workflow Canvas',title:'Canvas toolbar',desc:'Top of the left rail: new graph, author/run switch, workflow + save-format selects, and the run-status readout. Authoring tools mount below only in Author Mode.',src:'frontend/src/components/WorkflowCanvas.jsx — toolbar',
+  spec:{tokens:['panel','seg','input','type-label'],motion:['transit on mode swap']},
+  mount(stage,ctl,note){
+    const el=h(`<div class="panel" style="width:330px;padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div class="row" style="justify-content:space-between"><div><div class="type-title">Workflow canvas</div><div class="type-meta" style="margin-top:2px">desktop bridge connected</div></div><button class="btn btn-ghost btn-sm">New graph</button></div>
+      <div id="modeseg"></div>
+      <label class="field"><span class="lbl">Workflow</span><select class="input"><option>issue-029</option><option>issue-028</option></select></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label class="field"><span class="lbl">Save format</span><select class="input"><option>.yaml</option><option>.json</option></select></label>
+        <label class="field"><span class="lbl">Run status</span><div class="input" style="display:flex;align-items:center">${sigN('idle')}</div></label>
+      </div>
+      <div id="modehint" class="type-meta">Author mode: node palette + wire-edge bench below.</div></div>`);
+    const seg=segCtl([{key:'author',label:'author'},{key:'run',label:'run'}],'author',k=>{
+      el.querySelector('#modehint').textContent=k==='author'?'Author mode: node palette + wire-edge bench below.':'Run mode: start workflow run + live runtime overlay.';});
+    seg.style.width='100%';seg.querySelectorAll('button').forEach(b=>b.style.flex='1');
+    el.querySelector('#modeseg').append(seg);
+    stage.append(el);
+    note.textContent='Author ↔ Run swaps the tools beneath this toolbar; the swap must read as system reconfiguration, not a tab flick.';
+  }});
+
+add({id:'node-palette',group:'Workflow Canvas',title:'Node palette',desc:'Author-mode palette. Clicking a node body places it on the graph; Edit opens the contract form. Provider signal sits on the frame edge, not as a soft tint wash.',src:'frontend/src/components/WorkflowCanvas.jsx — palette',
+  spec:{tokens:['card','sig','marker-serial'],motion:['commit-local on place'],copy:'placements come from authored nodes'},
+  mount(stage){
+    const nodes=[{node_id:'node-001',name:'Architect',provider:'claude',label:'claude-opus-4-8'},{node_id:'node-002',name:'Worker',provider:'codex',label:'gpt-5-codex'}];
+    const wrap=h(`<div style="width:310px;display:flex;flex-direction:column;gap:8px">
+      <div class="row" style="justify-content:space-between"><span class="lbl" style="margin:0">Node palette</span><button class="btn btn-ghost btn-sm">New node</button></div></div>`);
+    nodes.forEach(n=>{
+      const edge=n.provider==='claude'?'var(--live-30)':'var(--pass-30)';
+      const c=h(`<div class="card" style="padding:12px;border-left:2px solid ${edge}">
+        <div class="row" style="justify-content:space-between;gap:8px">
+          <button class="place" style="flex:1;min-width:0;text-align:left;background:none;border:none;cursor:pointer;padding:0">
+            <span style="display:block;font-size:13px;font-weight:700;color:var(--text-primary)">${n.name}</span>
+            <span class="mono muted" style="font-size:12px">${n.node_id}</span></button>
+          <button class="btn btn-ghost btn-sm">Edit</button>
+        </div>
+        <div class="row" style="justify-content:space-between;margin-top:10px">${providerSig(n.provider)}<span class="type-meta">${n.label}</span></div></div>`);
+      c.querySelector('.place').onclick=()=>{c.classList.remove('fx-commit');void c.offsetWidth;c.classList.add('fx-commit');announce('Placed '+n.name+' on canvas');};
+      wrap.append(c);
+    });
+    stage.append(wrap);
+  }});
+
+add({id:'wireedge',group:'Workflow Canvas',title:'Wire-edge form',desc:'Connects two placements with the artifact that flows between them, the advance mode (allow/ask), and an optional guard. The artifact is the payload — it gets the emphasis, not the arrow.',src:'frontend/src/components/WorkflowCanvas.jsx — wire edge',
+  spec:{tokens:['card','input','sig'],motion:['commit-structural on add edge'],copy:'allow / ask are the advance modes'},
+  mount(stage){
+    const el=h(`<div class="card" style="width:330px;padding:14px;display:flex;flex-direction:column;gap:12px">
+      <span class="lbl" style="margin:0">Wire edge</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label class="field"><span class="lbl">From</span><select class="input"><option>Architect</option><option>Worker</option></select></label>
+        <label class="field"><span class="lbl">To</span><select class="input"><option>Worker</option><option>QA</option></select></label>
+      </div>
+      <label class="field"><span class="lbl">Artifact</span><select class="input"><option>PRD Spec (artifact-001)</option><option>Release Checklist (artifact-002)</option></select></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label class="field"><span class="lbl">Advance</span><select class="input"><option>allow</option><option>ask</option></select></label>
+        <label class="field"><span class="lbl">Guard label</span><input class="input" placeholder="optional"></label>
+      </div>
+      <label class="field"><span class="lbl">Guard condition</span><input class="input mono" placeholder="needs_review()"></label>
+      <button class="btn btn-commit" id="ae">Add edge</button></div>`);
+    el.querySelector('#ae').onclick=()=>{el.classList.remove('fx-commit');void el.offsetWidth;el.classList.add('fx-commit');announce('Edge wired: Architect → Worker · artifact-001');};
+    stage.append(el);
+  }});
+
+add({id:'graphcanvas',group:'Workflow Canvas',title:'Graph canvas',desc:'The workflow itself on the wireframe ground. Edges carry advance labels; the running node pulses; ask edges flow while awaiting confirmation. Nodes are draggable in author posture — edges reroute live, input-coupled.',src:'frontend/src/components/WorkflowCanvas.jsx — canvas',
+  spec:{tokens:['grid-ground','scanlines','sig','pulse-live'],motion:['reroute (input-coupled)','trace-flow on live edge','pulse on active node']},
+  mount(stage,ctl,note){
+    const nodes=[
+      {id:'step-01',name:'Architect',prov:'claude',status:'passed',x:36,y:56,inter:'afk'},
+      {id:'step-02',name:'Worker',prov:'codex',status:'active',x:300,y:150,inter:'hitl'},
+      {id:'step-03',name:'QA',prov:'claude',status:'queued',x:566,y:56,inter:'afk'}];
+    const edges=[{f:'step-01',t:'step-02',label:'allow',state:'done'},{f:'step-02',t:'step-03',label:'ask',state:'awaiting'}];
+    const stSig={queued:'<span class="sig">queued</span>',active:'<span class="sig sig-live">active</span>',passed:'<span class="sig sig-pass">passed</span>'};
+    const edgeCol={done:'var(--signal-pass)',awaiting:'var(--signal-warn)',idle:'#2c3a4c'};
+    const wrap=h(`<div class="grid-ground scanlines" style="position:relative;width:min(780px,100%);height:340px;overflow:hidden;border:1px solid var(--line-subtle)">
+      <svg style="position:absolute;inset:0;width:100%;height:100%" id="svg"></svg><div id="nodes"></div></div>`);
+    function edgeSvg(){
+      const pos=Object.fromEntries(nodes.map(n=>[n.id,n]));
+      return edges.map(e=>{
+        const f=pos[e.f],t=pos[e.t];
+        const x1=f.x+168,y1=f.y+44,x2=t.x,y2=t.y+44,mx=(x1+x2)/2,my=(y1+y2)/2;
+        return `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="${edgeCol[e.state]}" stroke-width="2" ${e.state==='awaiting'?'class="edge-flow"':''}/>
+          <rect x="${mx-31}" y="${my-24}" width="62" height="17" fill="var(--ground-1)" stroke="${edgeCol[e.state]}" stroke-width="1"/>
+          <text x="${mx}" y="${my-11}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="IBM Plex Mono,monospace" letter-spacing="2" style="text-transform:uppercase">${e.label}</text>`;
+      }).join('');
+    }
+    function draw(){
+      wrap.querySelector('#svg').innerHTML=edgeSvg();
+      const nb=wrap.querySelector('#nodes');nb.innerHTML='';
+      nodes.forEach(n=>{
+        const edge=n.prov==='claude'?'var(--live-30)':'var(--pass-30)';
+        const el=h(`<div class="card${n.status==='active'?' pulse-live':''}" style="position:absolute;left:${n.x}px;top:${n.y}px;width:168px;padding:10px 12px;cursor:grab;border-left:2px solid ${edge};background:var(--ground-2)">
+          <div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="mono" style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase">${n.prov[0]}·${n.prov==='claude'?'opus-4-8':'gpt-5-codex'}</span>${stSig[n.status]}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary)">${n.name}</div>
+          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="type-meta">${n.id}</span><span class="type-meta">${n.inter}</span></div></div>`);
+        el.onmousedown=(e)=>{
+          const r=wrap.getBoundingClientRect();
+          const ox=e.clientX-r.left-n.x, oy=e.clientY-r.top-n.y;
+          el.style.cursor='grabbing';
+          const move=(ev)=>{n.x=Math.max(4,Math.min(ev.clientX-r.left-ox,r.width-172));n.y=Math.max(4,Math.min(ev.clientY-r.top-oy,r.height-96));
+            el.style.left=n.x+'px';el.style.top=n.y+'px';wrap.querySelector('#svg').innerHTML=edgeSvg();};
+          window.addEventListener('mousemove',move);
+          window.addEventListener('mouseup',()=>{el.style.cursor='grab';window.removeEventListener('mousemove',move);},{once:true});
+          e.preventDefault();
+        };
+        nb.append(el);
+      });
+    }
+    stage.append(wrap);
+    note.textContent='Drag any node — edges reroute live with no easing pulling against the pointer. The amber flowing edge is an ask edge awaiting confirmation; the pulsing node is the active runtime step.';
+    draw();
+  }});
+
+add({id:'placement-inspector',group:'Workflow Canvas',title:'Placement inspector',desc:'Right rail for a selected placement: interactivity, run prompt, gate checklist, and produced artifacts. Gates read as an inspection bench — pass, fail, pending are unambiguous.',src:'frontend/src/components/WorkflowCanvas.jsx — inspector',
+  spec:{tokens:['panel','spec-sheet','sig-*','kv'],motion:['disclose-structural on open'],copy:'Passed / Failed / Pending as gate states'},
+  mount(stage){
+    const gate=(l,k,s)=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px${s==='failed'?';border-color:var(--stop-58)':''}">
+      <div><div style="font-size:12.5px;color:var(--text-primary)">${l}</div><span class="type-meta">${k}</span></div>
+      ${s==='passed'?sig('pass','passed'):s==='failed'?sig('stop','failed'):sigN('pending')}</div>`;
+    stage.append(h(`<div class="panel fx-transit" style="width:370px;padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div class="row" style="justify-content:space-between"><div><div class="type-title">Worker</div><div class="type-meta" style="margin-top:2px">gpt-5-codex · step-02</div></div>${sig('live','active')}</div>
+      <label class="field"><span class="lbl">Interactivity</span><select class="input"><option>afk</option><option>hitl</option></select></label>
+      <label class="field"><span class="lbl">Run prompt</span><textarea class="input" rows="3">Execute workflow step Worker.</textarea></label>
+      <div><span class="lbl" style="margin-bottom:8px">Gate checklist</span><div class="stack" style="gap:8px">
+        ${gate('output: 029 spec','WF-OUT-001','passed')}
+        ${gate('skill obligation: tdd','WF-SKILL-001','failed')}
+        ${gate('input present','WF-ENTRY-001','pending')}
+      </div></div>
+      <div><span class="lbl" style="margin-bottom:8px">Produced artifacts</span>
+        <div class="spec-sheet" style="padding:10px 12px"><div class="kv"><span class="v">agents/handoffs/029.md</span>${sig('pass','present')}</div></div></div>
+    </div>`));
+  }});
+
+/* ================= RUNTIME ================= */
+add({id:'node-atlas',group:'Runtime',title:'Run-state node atlas',desc:'Every runtime node state the graph must tell directly: active, blocked, waiting for human, passed, outdated, and learning-candidate escalation — plus retry counts and pinned-inspector hints.',src:'DESIGN_LANGUAGE_PRODUCT.md + INTERACTIONS.md §3',
+  spec:{tokens:['card','sig-*','pulse-live','line-critical'],motion:['pulse (active)','alarm-hard (blocked)','pulse-warn (waiting human)'],copy:'Active / Blocked / Waiting for Human'},
+  mount(stage,ctl,note){
+    const nodes=[
+      {name:'Architect',state:sig('pass','passed'),meta:'all gates passed',marks:['artifact ready'],cls:'',edge:'var(--pass-30)'},
+      {name:'Worker',state:sig('live','active'),meta:'running now',marks:['selected','pinned live'],cls:'pulse-live',edge:'var(--live-52)'},
+      {name:'QA',state:sig('warn','waiting for human'),meta:'confirm gate open',marks:['ask edge'],cls:'pulse-warn',edge:'var(--warn-52)'},
+      {name:'Critic',state:sig('stop','blocked'),meta:'output gate failed',marks:['violation inline'],cls:'fx-alarm-hard fx-glitch',edge:'var(--stop-58)'},
+      {name:'Updater',state:sig('stale','outdated'),meta:'library update available',marks:['pinned v4 · v5 exists'],cls:'fx-tear',edge:'var(--stale-30)'},
+      {name:'Reviser',state:sigN('paused revision'),meta:'attempt 3 of 4',marks:['learning candidate','retry escalated'],cls:'',edge:'var(--line-strong)'}];
+    const el=h(`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:min(920px,100%)"></div>`);
+    nodes.forEach((n,i)=>{
+      el.append(h(`<article class="card ${n.cls}" style="padding:14px;min-height:140px;border-left:2px solid ${n.edge};background:var(--ground-2)">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div><div style="font-size:14px;font-weight:700;color:var(--text-primary)">${n.name}</div><span class="type-meta">step-0${i+1}</span></div>
+          ${n.state}
+        </div>
+        <div class="muted" style="margin-top:10px;font-size:12px">${n.meta}</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:12px">${n.marks.map(m=>`<span class="chip">${m}</span>`).join('')}</div>
+      </article>`));
+    });
+    stage.append(el);
+    note.textContent='Persistent motion only where runtime-significant: the active node pulses magenta, the waiting-human node holds gold. Blocked strikes once, then stays held. Everything else is still.';
+  }});
+
+add({id:'edge-atlas',group:'Runtime',title:'Artifact edge atlas',desc:'Edges carry artifact meaning: named capsules, visible input ports, fan-out branches, compatibility failures, and missing-input stock warnings. The capsule is a stamped unit moving between stations.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 3',
+  spec:{tokens:['grid-ground','sig-*','marker-serial','line-critical'],motion:['trace-flow (healthy)','alarm-hard (incompatible)'],copy:'Missing required input · incompatible binding = failed inspection'},
+  mount(stage,ctl,note){
+    let mode='healthy';
+    const conf={
+      healthy:{col:'var(--signal-pass)',cap:sig('pass','flowing'),warn:'Fan-out preserves one artifact identity with separate edge instances.',flow:true},
+      incompatible:{col:'var(--signal-stop)',cap:sig('stop','incompatible'),warn:'Inspection failed: type mismatch on input qa_report.',flow:false},
+      missing:{col:'var(--signal-warn)',cap:sig('warn','missing input'),warn:'Missing required input: reviewer_notes. Stock absent at the input port.',flow:false},
+      manual:{col:'var(--signal-live)',cap:sig('live','presentation edit'),warn:'Manual wire editing is Author Mode only and purely visual.',flow:false}};
+    function draw(){
+      stage.innerHTML='';
+      const c=conf[mode];
+      const dash=mode==='manual'?'stroke-dasharray="6 5"':'';
+      const el=h(`<div class="grid-ground scanlines ${mode==='incompatible'?'fx-alarm-hard fx-glitch':''}" style="position:relative;width:min(920px,100%);height:360px;overflow:hidden;border:1px solid ${mode==='incompatible'?'var(--stop-58)':'var(--line-subtle)'}">
+        <svg style="position:absolute;inset:0;width:100%;height:100%">
+          <path d="M 182 150 C 300 150, 300 180, 392 180" fill="none" stroke="${c.col}" stroke-width="2" ${dash} ${c.flow?'class="edge-flow"':''}/>
+          <path d="M 516 180 C 616 180, 640 118, 758 118" fill="none" stroke="${c.col}" stroke-width="2" ${c.flow?'class="edge-flow"':''}/>
+          <path d="M 516 180 C 616 180, 640 238, 758 238" fill="none" stroke="${c.col}" stroke-width="2" ${c.flow?'class="edge-flow"':''}/>
+          <path d="M 516 180 C 616 180, 648 298, 758 298" fill="none" stroke="${c.col}" stroke-width="2" ${c.flow?'class="edge-flow"':''}/>
+          ${mode==='manual'?'<circle cx="292" cy="163" r="5" fill="var(--signal-live)"/><circle cx="616" cy="180" r="5" fill="var(--signal-live)"/><circle cx="644" cy="240" r="5" fill="var(--signal-live)"/>':''}
+        </svg>
+        <div class="card" style="position:absolute;left:40px;top:118px;width:140px;padding:12px;border-left:2px solid var(--live-30);background:var(--ground-2)">
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Architect</div><span class="lbl" style="margin-top:4px">out · brief</span></div>
+        <div class="card" style="position:absolute;left:394px;top:148px;width:122px;padding:10px;text-align:center;background:var(--ground-2);border-color:${c.col}">
+          <div style="font-size:12px;font-weight:700;color:var(--text-primary)">Brief Spec</div>
+          <div style="margin:4px 0">${serial('artifact-brief-001')}</div>${c.cap}</div>
+        ${[['Worker','in · task_brief',74],['QA','in · qa_report',196],['Archivist','in · final_brief',256]].map(([n,p,y])=>`
+          <div class="card" style="position:absolute;right:40px;top:${y}px;width:140px;padding:12px;background:var(--ground-2)">
+            <div style="font-size:13px;font-weight:700;color:var(--text-primary)">${n}</div><span class="lbl" style="margin-top:4px">${p}</span></div>`).join('')}
+        <div class="spec-sheet" style="position:absolute;left:24px;bottom:16px;right:24px;padding:10px 14px;z-index:2">
+          <div class="kv"><span class="lbl" style="margin:0">Edge inspection</span>${c.cap}</div>
+          <div class="muted" style="margin-top:6px;font-size:12px">${c.warn} Producer owns the output artifact spec.</div></div>
+      </div>`);
+      stage.append(el);
+    }
+    ctl.append(segCtl([{key:'healthy',label:'healthy'},{key:'incompatible',label:'incompatible'},{key:'missing',label:'missing input'},{key:'manual',label:'manual wire edit'}],'healthy',k=>{mode=k;draw();}));
+    note.textContent='Artifacts stay edges, not node types. Directional trace-flow runs only while the artifact path is live; failure states strike once and hold.';
+    draw();
+  }});
+
+add({id:'preflight',group:'Runtime',title:'Preflight dock',desc:'The trust surface: green/amber/red readiness as a rigorous systems check. Red failures are hard stops; amber overrides are per-run and demand rationale. Docked, persistent, recomputed on every draft run.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 4',
+  spec:{tokens:['panel','sig-*','stripe-caution','line-critical'],motion:['alarm-hard on red reveal','alarm-soft on amber','pending-scan on recompute'],copy:'Runnable / Caution / Hard stop'},
+  mount(stage,ctl,note){
+    let state='mixed';
+    const sets={
+      green:{pass:['Worker runnable','QA inputs satisfied','Provider ready'],warn:['Optional skill note missing'],stop:[]},
+      mixed:{pass:['Architect runnable','Worker output spec valid'],warn:['allowed_tools empty on Critic','Provider queue degraded on QA'],stop:['Unreachable Archivist node']},
+      stop:{pass:['Draft auto-saved'],warn:['Override available for suspicious path scope'],stop:['Missing input: reviewer_notes','Model unavailable: claude-opus-4-8','Invalid routing: orphan branch']}};
+    function draw(){
+      stage.innerHTML='';
+      const d=sets[state];
+      const col=(title,tone,items,fx)=>`<section class="panel ${fx||''}" style="padding:14px;min-height:200px${tone==='stop'&&items.length?';border-color:var(--stop-58)':''}">
+        <div class="kv"><span class="lbl" style="margin:0">${title}</span>${items.length?sig(tone,String(items.length)):sig('pass','0')}</div>
+        <div class="stack" style="gap:6px;margin-top:12px">
+          ${items.length?items.map(it=>`<div class="card--inset card${it.includes('degraded')?' sig-flicker':''}" style="padding:8px 10px;font-size:12px;color:var(--text-secondary)">${it}</div>`).join(''):'<div class="type-meta dither" style="padding:10px 8px">all clear — nothing to inspect</div>'}
+        </div></section>`;
+      stage.append(h(`<div class="fx-transit" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:min(920px,100%)">
+        ${col('Runnable','pass',d.pass)}
+        ${col('Caution — override eligible','warn',d.warn,d.warn.length?'fx-alarm-soft':'')}
+        ${col('Hard stop','stop',d.stop,d.stop.length?'fx-alarm-hard fx-glitch':'')}
+      </div>`));
+      stage.append(h(`<div class="${state==='stop'?'stripe-caution':'card'}" style="margin-top:12px;width:min(920px,100%);padding:10px 14px">
+        <div class="kv"><span class="lbl" style="margin:0">Override policy</span>${state==='stop'?sig('stop','red cannot be overridden'):sig('warn','amber is per-run only')}</div>
+        <div style="margin-top:6px;font-size:12px;color:var(--text-secondary)">Amber overrides require rationale and never become saved workflow defaults. Red failures block execution until resolved.</div></div>`));
+    }
+    ctl.append(segCtl([{key:'green',label:'all green'},{key:'mixed',label:'mixed'},{key:'stop',label:'hard stop'}],'mixed',k=>{state=k;draw();}));
+    note.textContent='All-clear states stay calm and still — no celebration. Hard-stop reveals strike once via alarm-hard and hold; caution striping appears only when a real override surface exists.';
+    draw();
+  }});
+
+add({id:'drillin-inspector',group:'Runtime',title:'Node drill-in inspector',desc:'The operational instrument panel for a selected node: contract, inputs, output spec, compiled context, transcript, trace, gates, produced artifacts, violations. Stacked, not tabbed. Pinned vs live-follow is explicit.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 2',
+  spec:{tokens:['panel','hud','spec-sheet','sig-*'],motion:['disclose-structural on open','lock-secondary on section focus'],copy:'contract = blueprint sheet · transcript = work log · trace = tool marks'},
+  mount(stage,ctl,note){
+    let pinned=true;
+    const section=(title,body,thematic)=>`<section class="spec-sheet" style="padding:10px 12px">
+      <div class="kv"><span class="lbl" style="margin:0">${title}</span>${thematic?`<span class="type-meta">${thematic}</span>`:''}</div>
+      <div style="margin-top:6px;font-size:12px;color:var(--text-secondary);line-height:1.6">${body}</div></section>`;
+    function draw(){
+      stage.innerHTML='';
+      stage.append(h(`<div class="panel hud fx-transit" style="width:min(960px,100%);padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+          <div><div class="type-title">Worker — step-02</div><span class="type-meta">node drill-in</span></div>
+          <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <span class="chip"><span class="ty">nav</span>prev related</span>
+            <span class="chip"><span class="ty">nav</span>next related</span>
+            <span class="chip"><span class="ty">jump</span>edge capsule</span>
+            ${sig('live','active')}
+            ${pinned?sig('stale','pinned'):sig('live','live follow')}
+            ${pinned?'<span class="sig sig-warn fx-tear">stale vs active</span>':''}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+          ${section('Node contract','provider: codex · model: gpt-5-codex · effort: high · tools: shell · paths: frontend/src, tests','blueprint sheet')}
+          ${section('Input artifacts','task_brief, reviewer_notes, frozen rule context. Missing inputs surface here and on graph ports.')}
+          ${section('Output artifact spec','brief_revision — owned by this producer; compatibility fallout shows downstream.')}
+          ${section('Compiled context preview','constitution, directives, skills, inputs, replayed context, frozen rules.')}
+          ${section('Run transcript','narrative output, separate from trace; turns stay selectable.','work log')}
+          ${section('Trace + tool calls','shell and tool evidence expands independently.','tool marks')}
+          ${section('Gate checklist','entry, output, and skill-obligation checks — passed / failed / pending.')}
+          ${section('Produced artifacts','latest artifact preview, ids, downstream usage.')}
+          ${section('Violations + corrections','current blockers foregrounded; resolved history behind reveal with provenance.','rework history')}
+        </div>
+      </div>`));
+    }
+    ctl.append(segCtl([{key:'pin',label:'pinned'},{key:'live',label:'live follow'}],'pin',k=>{pinned=k==='pin';draw();}));
+    note.textContent='One primary selection; the pinned/live distinction and the stale warning keep inspection state honest while the run moves on.';
+    draw();
+  }});
+
+add({id:'context-preview',group:'Runtime',title:'Compiled context preview',desc:'What the system will send, compiled and evidentiary. Summary-first; every section expands to the exact payload. This surface expresses context control — the product’s deepest value.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 5',
+  spec:{tokens:['spec-sheet','type-meta','sig-live'],motion:['disclose-inline per section'],copy:'compiled payload · exact text on demand'},
+  mount(stage,ctl,note){
+    let expanded=false;
+    const rows=[
+      ['Constitution + directives','2 directives · 1 constitution block'],
+      ['Skills','tdd · frontend-design'],
+      ['Input artifacts','task_brief · qa_report'],
+      ['Artifact specs','brief_revision · qa_evidence'],
+      ['Replayed prior context','2 prior attempts in revision loop'],
+      ['Frozen rules','workflow scope + node scope']];
+    function draw(){
+      stage.innerHTML='';
+      stage.append(h(`<div class="panel fx-transit" style="width:min(760px,100%);padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div class="kv" style="margin-bottom:6px"><div><div class="type-title">Compiled context</div><span class="type-meta">what this node will receive</span></div>${expanded?sig('live','exact payload'):sigN('summaries')}</div>
+        ${rows.map(([k,v])=>`<div class="spec-sheet" style="padding:10px 12px">
+          <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">${k}</span><span class="type-meta">${v}</span></div>
+          ${expanded?`<div class="mono fx-disclose" style="margin-top:8px;font-size:12.5px;color:var(--text-muted);white-space:pre-wrap;border-top:1px solid var(--line-subtle);padding-top:8px">payload :: ${k.toLowerCase()}\nexact compiled text renders here for audit before send.</div>`:''}
+        </div>`).join('')}
+      </div>`));
+    }
+    ctl.append(segCtl([{key:'sum',label:'summaries'},{key:'full',label:'expand all'}],'sum',k=>{expanded=k==='full';draw();}));
+    note.textContent='Read-first. Editing happens only in the narrower authoring seams that own each source; the preview itself is evidence.';
+    draw();
+  }});
+
+add({id:'human-gate',group:'Runtime',title:'Ask edge + human gate',desc:'Inline confirm/reject on the edge itself. Reject pauses the workflow for revision — reason mandatory, note optional, feedback re-enters the next attempt. Caution striping marks the open gate.',src:'DESIGN_LANGUAGE_INTERACTIONS.md §10',
+  spec:{tokens:['stripe-caution','sig-warn','btn-commit','pulse-warn'],motion:['pulse-warn while awaiting','commit-structural on confirm','alarm-soft on reject'],copy:'Awaiting Confirmation / Paused for revision / Resumed'},
+  mount(stage,ctl,note){
+    let state='awaiting';
+    function draw(){
+      stage.innerHTML='';
+      const head=state==='awaiting'?sig('warn','awaiting confirmation'):state==='rejected'?sig('stop','paused for revision'):sig('pass','resumed');
+      const body=state==='awaiting'
+        ?'Edge is waiting for explicit confirm or reject. Controls stay on the graph; the inspector carries detail.'
+        :state==='rejected'
+        ?'Reject pauses the workflow for upstream revision. The reason is mandatory and is injected into the next revision context.'
+        :'Workflow resumed after revision attempt 3. Attempt lineage stays nested under the same node run.';
+      stage.append(h(`<div class="panel ${state==='awaiting'?'pulse-warn':state==='rejected'?'fx-alarm-soft':'fx-commit'}" style="width:min(720px,100%);padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div><div class="type-title">Ask edge — artifact handoff</div><span class="type-meta">Worker → QA</span></div>${head}
+        </div>
+        ${state==='awaiting'?`<div class="stripe-caution carrier" style="padding:8px 12px"><span class="mono" style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal-warn);position:relative;z-index:2">Human gate open — workflow holds here</span></div>`:''}
+        <div class="spec-sheet" style="padding:10px 12px">
+          <div class="kv"><span class="v">artifact-brief-001 · Brief Spec</span>${serial('run-042 / step-02')}</div>
+          <div class="muted" style="margin-top:6px;font-size:12px">${body}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="field"><span class="lbl">Reject reason — required</span><select class="input" ${state!=='rejected'?'disabled':''}><option>insufficient evidence</option><option>wrong artifact contract</option><option>needs revision</option></select></label>
+          <label class="field"><span class="lbl">Note — optional</span><input class="input" ${state!=='rejected'?'disabled':''} value="Need explicit acceptance criteria before QA."></label>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="btn btn-commit" ${state!=='awaiting'?'disabled':''} id="ok">Confirm</button>
+          <button class="btn btn-danger" ${state!=='awaiting'?'disabled':''} id="rej">Reject</button>
+          <button class="btn btn-pass" ${state!=='resumed'?'disabled':''}>Resume workflow</button>
+        </div>
+      </div>`));
+      const ok=stage.querySelector('#ok'),rej=stage.querySelector('#rej');
+      if(ok)ok.onclick=()=>announce('Ask edge confirmed — downstream node runnable');
+      if(rej)rej.onclick=()=>announce('Reject requires a reason — switch to the rejected state');
+    }
+    ctl.append(segCtl([{key:'awaiting',label:'awaiting'},{key:'rejected',label:'rejected'},{key:'resumed',label:'resumed'}],'awaiting',k=>{state=k;draw();}));
+    note.textContent='The gate pulses amber only while human input is genuinely awaited. Reject is not destructive — it pauses, records why, and feeds the next attempt.';
+    draw();
+  }});
+
+add({id:'learning',group:'Runtime',title:'Correction + learning surface',desc:'Pending correction candidates, promoted frozen rules, scope, provenance, and supersede history. Procedural and auditable — shop memory, not suggestions.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 7',
+  spec:{tokens:['panel','spec-sheet','marker-serial','sig-stale'],motion:['commit-structural on promote'],copy:'Correction promoted to frozen rule · rework history'},
+  mount(stage){
+    stage.append(h(`<div style="display:grid;grid-template-columns:1.05fr .95fr;gap:12px;width:min(940px,100%)">
+      <section class="panel" style="padding:16px">
+        <div class="kv"><div><div class="type-title">Correction candidates</div><span class="type-meta">retry loops surface these automatically</span></div>${sig('stale','2 pending')}</div>
+        <div class="stack" style="gap:10px;margin-top:14px">
+          <div class="spec-sheet" style="padding:12px">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Require acceptance criteria before QA handoff</span>${sig('live','node scope')}</div>
+            <div class="row" style="gap:8px;margin-top:8px">${serial('run-042 / step-03 / trace-18')}</div>
+            <div class="type-meta" style="margin-top:6px">narrowest valid scope is the default recommendation</div>
+            <div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-sm btn-commit">Promote to frozen rule</button><button class="btn btn-ghost btn-sm">Dismiss</button></div>
+          </div>
+          <div class="spec-sheet" style="padding:12px">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Do not fan out incomplete artifact specs</span>${sig('warn','workflow scope')}</div>
+            <div class="row" style="gap:8px;margin-top:8px">${serial('preflight failures · attempts 2-4')}</div>
+            <div class="type-meta" style="margin-top:6px">widening beyond workflow requires escalation</div>
+          </div>
+        </div>
+      </section>
+      <section class="panel" style="padding:16px">
+        <div class="kv"><div><div class="type-title">Frozen rules</div><span class="type-meta">promoted, inspectable, never silently deleted</span></div>${sig('stale','3 active')}</div>
+        <div class="stack" style="gap:10px;margin-top:14px">
+          <div class="spec-sheet" style="padding:12px">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Explicit review note required before QA</span>${sig('live','workflow')}</div>
+            <div class="row" style="gap:8px;margin-top:8px">${serial('FR-019')}${serial('supersedes FR-012')}</div>
+            <div class="type-meta" style="margin-top:6px">disable + supersede lineage stays visible</div>
+          </div>
+          <div class="spec-sheet" style="padding:12px">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Machine-local provider outage guard</span>${sig('stop','machine')}</div>
+            <div class="row" style="gap:8px;margin-top:8px">${serial('FR-021')}</div>
+            <div class="type-meta" style="margin-top:6px">operational scope, separate from workflow learnings</div>
+          </div>
+        </div>
+      </section>
+    </div>`));
+    stage.querySelector('.btn-commit').onclick=(e)=>{const s=e.target.closest('.spec-sheet');s.classList.add('fx-commit');announce('Correction promoted to frozen rule — FR-022');};
+  }});
+
+add({id:'constraints',group:'Runtime',title:'Decision atlas + constraints',desc:'The locked decisions, deferrals, and anti-goals from the design grill, kept visible so the UI does not drift back toward retired concepts.',src:'design synthesis — locked decisions',
+  spec:{tokens:['card','type-label'],copy:'constraints stated as facts, not advice'},
+  mount(stage){
+    const items=[
+      ['Removed','No literal path fallback. No migration of old path-wired workflows.'],
+      ['Kept simple','One primary output artifact per node in v1. Artifacts stay edges, not node types.'],
+      ['Runtime safety','Red preflight failures are hard stops. Amber overrides are per-run only.'],
+      ['Authoring scope','Manual wire editing is visual only. Full auto-layout is out of scope.'],
+      ['Surface boundaries','No return to Console as a peer tab. No publish step in v1.'],
+      ['Deferred','Auto-follow, shareable filters, template-instance follow, mixed-type multi-select.']];
+    stage.append(h(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(920px,100%)">
+      ${items.map(([k,v])=>`<section class="card" style="padding:14px;border-left:2px solid var(--line-strong)"><span class="lbl" style="margin-bottom:6px">${k}</span><div style="font-size:12.5px;color:var(--text-secondary)">${v}</div></section>`).join('')}
+    </div>`));
+  }});
+
+/* ================= LIBRARY ================= */
+add({id:'library-inventory',group:'Library',title:'Typed control-plane inventory',desc:'The hardened registry: Nodes, Artifacts, Skills, Providers/Engines, Frozen Rules, Workflow Templates — with readiness and version signals. An inventory of stock, not a gallery of cards.',src:'DESIGN_LANGUAGE_PRODUCT.md — hero surface 6',
+  spec:{tokens:['panel','sig-*','marker-serial'],motion:['transit on view swap'],copy:'versioned stock with provenance'},
+  mount(stage,ctl,note){
+    let view='inventory';
+    function draw(){
+      stage.innerHTML='';
+      if(view==='inventory'){
+        const cell=(cat,name,meta,extra)=>`<section class="panel" style="padding:12px">
+          <span class="lbl" style="margin-bottom:8px">${cat}</span>
+          <div class="card--inset card" style="padding:10px 12px">
+            <div class="kv"><span style="font-size:12.5px;font-weight:600;color:var(--text-primary)">${name}</span>${extra||''}</div>
+            <div class="type-meta" style="margin-top:6px">${meta}</div></div></section>`;
+        stage.append(h(`<div class="fx-transit" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:min(940px,100%)">
+          ${cell('Nodes','Worker v4','pinned in 7 workflows',sig('stale','update available'))}
+          ${cell('Artifacts','brief_revision','spec-owned · reused in 3 templates',serial('artifact-003'))}
+          ${cell('Skills','tdd','obligation-ready with proof markers')}
+          ${cell('Providers + engines','claude-opus-4-8','operational readiness surface','<span class="sig sig-warn sig-flicker">degraded</span>')}
+          ${cell('Frozen rules','FR-019','workflow scoped · provenance retained',sig('stale','active'))}
+          ${cell('Workflow templates','Review loop','executable blueprint with placeholders')}
+        </div>`));
+      }else{
+        stage.append(h(`<div class="panel fx-transit" style="width:min(760px,100%);padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div class="kv"><div><div class="type-title">Template instantiation + update review</div><span class="type-meta">templates become editable drafts</span></div>${sig('stop','2 unresolved placeholders')}</div>
+          <div class="spec-sheet" style="padding:12px;border-left-color:var(--stop-58)">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Placeholder: provider</span>${sig('stop','required')}</div>
+            <div class="type-meta" style="margin-top:6px">run is blocked until every placeholder is resolved — red preflight</div></div>
+          <div class="spec-sheet" style="padding:12px;border-left-color:var(--stale-30)">
+            <div class="kv"><span style="font-size:12.5px;color:var(--text-primary)">Node update review: Worker v4 → v5</span>${sig('stale','breaking — stay pinned')}</div>
+            <div class="type-meta" style="margin-top:6px">semantic impact summarized per workflow · upgrade-and-repair is explicit opt-in</div></div>
+        </div>`));
+      }
+    }
+    ctl.append(segCtl([{key:'inventory',label:'inventory'},{key:'templates',label:'templates + updates'}],'inventory',k=>{view=k;draw();}));
+    note.textContent='Providers are operational readiness surfaces, nodes are versioned assets, templates are executable blueprints. Passive lists stay motionless.';
+    draw();
+  }});
+
+add({id:'adhoc-runner',group:'Library',title:'Ad-hoc single-node run',desc:'The secondary standalone runner rendered as a temporary one-node graph, so ad-hoc execution keeps workflow semantics — context preview, preflight, gates, trace — instead of reviving a console model.',src:'design synthesis — recommended direction',
+  spec:{tokens:['grid-ground','card','sig-*'],copy:'secondary surface, subordinate to workflows'},
+  mount(stage){
+    stage.append(h(`<div class="panel" style="width:min(720px,100%);padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div class="kv"><div><div class="type-title">Ad-hoc single-node run</div><span class="type-meta">same runtime semantics · temporary one-node graph</span></div>${sigN('secondary surface')}</div>
+      <div class="grid-ground" style="padding:26px;border:1px solid var(--line-subtle);display:grid;place-items:center">
+        <div class="card" style="width:240px;padding:14px;text-align:center;border-left:2px solid var(--live-30);background:var(--ground-2)">
+          <div style="font-size:14px;font-weight:700;color:var(--text-primary)">Standalone Worker</div>
+          <span class="type-meta">temporary one-node graph</span>
+          <div class="row" style="justify-content:center;gap:5px;flex-wrap:wrap;margin-top:12px">
+            ${sig('live','context')}${sig('pass','preflight')}${sig('warn','gates')}${sig('stale','trace')}
+          </div></div>
+      </div>
+      <div class="type-meta">Exists for prototyping and sanity checks — not a parallel mental model for the product.</div>
+    </div>`));
+  }});
+
+/* ================= COORDINATOR ================= */
+add({id:'catalogtabs',group:'Coordinator',title:'Nodes / Artifacts catalog switch',desc:'The left-rail catalog switch between the node roster and the artifact catalog — two mutually exclusive scopes sharing one rail.',src:'frontend/src/components/Coordinator.jsx — catalog',
+  spec:{tokens:['panel','seg'],motion:['transit on scope swap']},
+  mount(stage,ctl,note){
+    const el=h(`<div class="panel" style="width:290px">
+      <div style="border-bottom:1px solid var(--line-subtle);padding:12px 14px">
+        <div id="tabs"></div>
+        <div class="type-meta" id="cnt" style="margin-top:8px">3 nodes</div></div>
+      <div style="padding:14px" class="type-meta" id="body">node roster…</div></div>`);
+    const seg=segCtl([{key:'nodes',label:'nodes'},{key:'artifacts',label:'artifacts'}],'nodes',k=>{
+      el.querySelector('#cnt').textContent=k==='nodes'?'3 nodes':'2 artifacts';
+      const b=el.querySelector('#body');b.textContent=k==='nodes'?'node roster…':'artifact catalog…';
+      b.classList.remove('fx-transit');void b.offsetWidth;b.classList.add('fx-transit');});
+    seg.style.width='100%';seg.querySelectorAll('button').forEach(b=>b.style.flex='1');
+    el.querySelector('#tabs').append(seg);
+    stage.append(el);
+    note.textContent='The switch must show what scope you are in and what changed because of it — the count and body swap together.';
+  }});
+
+add({id:'nodecard',group:'Coordinator',title:'Node card',desc:'Roster entry. The body selects the node — selection acquires the magenta lock frame; Edit opens the contract form; Delete states its consequence.',src:'frontend/src/components/Coordinator.jsx — node card',
+  spec:{tokens:['card','sig','line-strong'],motion:['lock-primary on select','dismiss-destructive on delete']},
+  mount(stage,ctl,note){
+    const nodes=[{node_id:'node-001',name:'Architect',provider:'claude',tags:['architect'],sel:true},{node_id:'node-002',name:'Worker',provider:'codex',tags:['worker'],sel:false}];
+    function draw(){
+      stage.innerHTML='';
+      nodes.forEach(n=>{
+        const c=h(`<div class="card${n.sel?' fx-lock':''}" style="width:260px;padding:12px;${n.sel?'border-color:var(--live-52);background:var(--ground-2)':''}">
+          <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px">
+            <button class="sel" style="flex:1;min-width:0;text-align:left;background:none;border:none;cursor:pointer;padding:0">
+              <span style="display:block;font-size:13px;font-weight:700;color:var(--text-primary)">${n.name}</span>
+              <span class="mono muted" style="font-size:12px">${n.node_id}</span></button>
+            <button class="btn btn-ghost btn-sm ed">Edit</button>
+          </div>
+          <div class="row" style="gap:6px;margin-top:12px;flex-wrap:wrap">${providerSig(n.provider)}${tagChips(n.tags)}${sigN('idle')}</div>
+          <div style="margin-top:12px"><button class="btn btn-danger btn-sm del">Delete</button></div></div>`);
+        c.querySelector('.sel').onclick=()=>{nodes.forEach(x=>x.sel=x===n);draw();};
+        c.querySelector('.ed').onclick=()=>announce('Edit '+n.name+' → opens node contract form');
+        c.querySelector('.del').onclick=()=>announce('Delete '+n.name+' — persistent deletion, asks for confirmation');
+        stage.append(c);
+      });
+    }
+    note.textContent='Click a card body to acquire selection — lock-primary snap, magenta frame. Delete is visually distinct because it is destructive, not dismissive.';
+    draw();
+  }});
+
+add({id:'artifactcard',group:'Coordinator',title:'Artifact card',desc:'Artifact catalog entry: name, serial, tags, and the heading-rule count that defines its inspection gate.',src:'frontend/src/components/Coordinator.jsx — artifact card',
+  spec:{tokens:['card','marker-serial','chip'],copy:'heading rules are the artifact’s inspection criteria'},
+  mount(stage){
+    ARTIFACTS.forEach((a,i)=>stage.append(h(`<div class="card${i===0?' ':''}" style="width:260px;padding:12px;${i===0?'border-color:var(--live-52);background:var(--ground-2)':''}">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div><div style="font-size:13px;font-weight:700;color:var(--text-primary)">${a.name}</div><div style="margin-top:4px">${serial(a.artifact_id)}</div></div>
+        <button class="btn btn-ghost btn-sm">Edit</button></div>
+      <div class="row" style="gap:6px;margin-top:12px">${tagChips(a.tags)}</div>
+      <div class="type-meta" style="margin-top:8px">${a.headings.length} heading rule${a.headings.length===1?'':'s'} · required sections gate output</div>
+      <div style="margin-top:12px"><button class="btn btn-danger btn-sm">Delete</button></div></div>`)));
+  }});
+
+add({id:'conversation',group:'Coordinator',title:'Conversation panel',desc:'A node work log. User / agent / thinking / error turns are tone-coded; each turn toggles in or out of the forwarded context; excluded turns dim and drop.',src:'frontend/src/components/Coordinator.jsx — conversation',
+  spec:{tokens:['card--inset','font-mono','signal-*'],motion:['trace-stream on new turns'],copy:'transcript = work log, separate from trace'},
+  mount(stage,ctl,note){
+    const turns=[
+      {label:'user',text:'Draft the ADR for the node runtime.',cat:'user',inc:true},
+      {label:'agent',text:'Reading workflow_runtime.py to ground the decision…',cat:'thinking',inc:true},
+      {label:'agent',text:'ADR-0003 drafted: the node graph is an executable gatekeeper runtime.',cat:'content',inc:true},
+      {label:'agent',text:'FOREIGN KEY constraint failed on migrate.',cat:'error',inc:false}];
+    const tone={user:['var(--signal-live)','var(--text-primary)'],thinking:['var(--signal-stale)','var(--text-muted)'],error:['var(--signal-stop)','var(--signal-stop)'],content:['var(--signal-pass)','var(--text-secondary)']};
+    const el=h(`<div class="card" style="width:min(600px,100%)">
+      <div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line-subtle);padding:10px 14px">
+        <span class="type-title" style="font-size:13px">Run transcript</span>
+        <div class="row" style="gap:10px"><span class="type-meta">tool calls live in Trace</span><button class="btn btn-ghost btn-sm" id="cp">Copy</button></div></div>
+      <div class="card--inset scanlines" style="padding:14px;font-family:var(--font-mono);font-size:12px;display:flex;flex-direction:column;gap:3px" id="rows"></div></div>`);
+    function draw(){
+      const rows=el.querySelector('#rows');rows.innerHTML='';
+      turns.forEach(t=>{
+        const [lc,tc]=tone[t.cat];
+        const r=h(`<div style="display:flex;align-items:flex-start;gap:12px;padding:2px 0;position:relative;z-index:2;${t.inc?'':'opacity:.32'}">
+          <span style="width:48px;flex:none;text-align:right;color:${lc};font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px">${t.label}</span>
+          <span style="flex:1;white-space:pre-wrap;color:${tc};${t.cat==='thinking'?'font-style:italic':''}">${esc(t.text)}</span>
+          <button class="btn btn-sm tog" style="flex:none">${t.inc?'exclude':'include'}</button></div>`);
+        r.querySelector('.tog').onclick=()=>{t.inc=!t.inc;draw();};
+        rows.append(r);
+      });
+    }
+    el.querySelector('#cp').onclick=()=>{announce('Transcript copied');};
+    stage.append(el);
+    note.textContent='Toggle include/exclude per turn — inclusion state must survive inspection. Narrative stays here; tool evidence stays in Trace.';
+    draw();
+  }});
+
+add({id:'trace',group:'Coordinator',title:'Trace panel',desc:'Collapsible tool-call evidence. Each row expands to the exact command, output, and exit code — write / read / shell tone-coded. Tool marks, not narrative.',src:'frontend/src/components/Coordinator.jsx — trace',
+  spec:{tokens:['card--inset','sig','font-mono'],motion:['disclose-inline per row'],copy:'trace = tool marks'},
+  mount(stage,ctl,note){
+    const evs=[
+      {action:'read',cmd:'hephaestus/workflow_runtime.py',out:'480: def _output_bindings(self, node, edges):',exit:0,ts:'17:41:02'},
+      {action:'shell',cmd:'python -m pytest -q',out:'216 passed in 15.01s',exit:0,ts:'17:43:11'},
+      {action:'write',cmd:'docs/adr/0003-node-graph.md',out:'wrote 84 lines',exit:0,ts:'17:44:20'}];
+    const tone={write:'warn',read:'live',shell:'stale'};
+    let open=true;const opened={};
+    const el=h(`<div class="card" style="width:min(600px,100%)">
+      <button id="hd" class="kv" style="width:100%;padding:10px 14px;background:none;border:none;cursor:pointer">
+        <span class="type-title" style="font-size:13px">Trace <span class="type-meta">(${evs.length} tool calls)</span></span>
+        <span class="type-meta" id="chev">collapse</span></button>
+      <div id="bd" style="border-top:1px solid var(--line-subtle);padding:10px;display:flex;flex-direction:column;gap:6px"></div></div>`);
+    function draw(){
+      el.querySelector('#bd').style.display=open?'flex':'none';
+      el.querySelector('#chev').textContent=open?'collapse':'expand';
+      const bd=el.querySelector('#bd');bd.innerHTML='';
+      evs.forEach((e,i)=>{
+        const iso=opened[i];
+        const r=h(`<div class="card--inset card">
+          <button class="rowbtn" style="display:flex;align-items:center;width:100%;gap:8px;padding:6px 8px;background:none;border:none;cursor:pointer;text-align:left;font-size:13px">
+            ${sig(tone[e.action],e.action)}
+            <span class="mono muted" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.cmd)}</span>
+            <span class="mono" style="color:${e.exit===0?'var(--signal-pass)':'var(--signal-stop)'};font-size:12px">exit ${e.exit}</span>
+            <span class="type-meta">${e.ts}</span></button>
+          ${iso?`<div class="fx-disclose" style="border-top:1px solid var(--line-subtle);padding:8px 10px;font-family:var(--font-mono);font-size:13px">
+            <div style="color:var(--text-secondary);white-space:pre-wrap">$ ${esc(e.cmd)}</div>
+            <pre style="margin:4px 0 0;white-space:pre-wrap;color:var(--text-muted)">${esc(e.out)}</pre></div>`:''}</div>`);
+        r.querySelector('.rowbtn').onclick=()=>{opened[i]=!opened[i];draw();};
+        bd.append(r);
+      });
+    }
+    el.querySelector('#hd').onclick=()=>{open=!open;draw();};
+    stage.append(el);
+    note.textContent='Rows disclose inline — tight mechanical reveal, container stays stable. Evidence is exact: command, output, exit code.';
+    draw();
+  }});
+
+add({id:'spawncard',group:'Coordinator',title:'Spawn card',desc:'Appears when an agent emits a handoff marker. Passed gates = ready to spawn; failed gates = spawn allowed with the failures stated. Confirm prefills the next task.',src:'frontend/src/components/Coordinator.jsx — spawn',
+  spec:{tokens:['card','sig-pass','sig-warn','marker-serial'],motion:['alarm-soft on gated state','commit-structural on confirm'],copy:'gate failures listed with their fix'},
+  mount(stage,ctl,note){
+    let g='warn';
+    function draw(){
+      stage.innerHTML='';
+      const green=g==='pass';
+      const el=h(`<div class="card ${green?'':'fx-alarm-soft'}" style="width:min(560px,100%);padding:14px;border-left:2px solid ${green?'var(--pass-58)':'var(--warn-52)'}">
+        <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          ${green?sig('pass','ready to spawn'):sig('warn','spawn — gate failures present')}
+          <span class="type-meta">target: architect · reconcile ADR-0001</span></div>
+        ${green?'':`<div class="spec-sheet" style="padding:8px 12px;margin-bottom:12px;border-left-color:var(--warn-52)">
+          <div class="kv"><span class="v">G-003 — required skill 'tdd' not declared</span></div>
+          <div class="type-meta" style="margin-top:4px">fix: add skill:tdd to obligations</div></div>`}
+        <div class="row" style="gap:8px">
+          <button class="btn ${green?'btn-pass':'btn-commit'} btn-sm" id="ok">Confirm spawn</button>
+          <button class="btn btn-ghost btn-sm" id="no">Dismiss</button></div></div>`);
+      el.querySelector('#ok').onclick=()=>announce('Task prefilled into composer');
+      el.querySelector('#no').onclick=()=>announce('Spawn suggestion dismissed');
+      stage.append(el);
+    }
+    ctl.append(segCtl([{key:'warn',label:'gate failures'},{key:'pass',label:'gates passed'}],'warn',k=>{g=k;draw();}));
+    note.textContent='Gate outcome drives the frame edge and the failure sheet. Failures always name the rule and the fix.';
+    draw();
+  }});
+
+add({id:'composer',group:'Coordinator',title:'Message composer',desc:'Sends a message to the selected node, optionally tagged with an issue id. A contract instrument, not a chat box.',src:'frontend/src/components/Coordinator.jsx — composer',
+  spec:{tokens:['card','input','btn-commit'],motion:['commit-local on send']},
+  mount(stage){
+    const el=h(`<form class="card" onsubmit="return false" style="width:min(560px,100%);padding:16px;display:flex;flex-direction:column;gap:12px">
+      <label class="field"><span class="lbl">Issue — optional</span><input class="input mono" placeholder="issue-003"></label>
+      <label class="field"><span class="lbl">Message</span><textarea class="input" rows="4" placeholder="Send a message to this node."></textarea></label>
+      <button class="btn btn-commit" style="align-self:flex-start">Send message</button></form>`);
+    el.querySelector('button').onclick=()=>announce('Message sent to node-001');
+    stage.append(el);
+  }});
+
+/* ================= FORMS ================= */
+add({id:'listeditor',group:'Forms',title:'ListEditor',desc:'The add/remove chip control reused for skills, obligations, allowed paths, and tools. Enter or Add appends; × removes; duplicates are ignored silently.',src:'frontend/src/components/NodeForm.jsx — ListEditor',
+  spec:{tokens:['chip','input','btn'],motion:['commit-local on add','dismiss-destructive on remove']},
+  mount(stage,ctl,note){
+    let items=['skill:tdd','frontend/src'];
+    const el=h(`<label class="field" style="width:min(480px,100%)"><span class="lbl">Allowed paths</span>
+      <div class="stack" style="gap:8px">
+        <div class="row" id="chips" style="flex-wrap:wrap;gap:6px"></div>
+        <div class="row" style="gap:8px"><input class="input mono" id="d" placeholder="frontend/src"><button class="btn" id="add" style="flex:none">Add</button></div>
+      </div></label>`);
+    function draw(){
+      const c=el.querySelector('#chips');
+      c.innerHTML=items.length?'':'<span class="type-meta">No entries yet.</span>';
+      items.forEach((it,i)=>{
+        const chip=h(`<span class="chip fx-disclose"><span class="mono">${esc(it)}</span><button class="x" aria-label="remove">×</button></span>`);
+        chip.querySelector('.x').onclick=()=>{items.splice(i,1);draw();};
+        c.append(chip);
+      });
+    }
+    const addItem=()=>{const inp=el.querySelector('#d');const v=inp.value.trim();if(!v||items.includes(v)){inp.value='';return;}items.push(v);inp.value='';draw();};
+    el.querySelector('#add').onclick=addItem;
+    el.querySelector('#d').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addItem();}};
+    stage.append(el);
+    note.textContent='Type + Enter/Add to append; × to remove. The chip is the unit of evidence — no hidden state.';
+    draw();
+  }});
+
+add({id:'bindingeditor',group:'Forms',title:'ArtifactBindingEditor',desc:'Binds node inputs/outputs to authored artifacts only. Literal path fallback is removed; every binding is typed, named, and contract-aware.',src:'frontend/src/components/ArtifactBindingEditor.jsx',
+  spec:{tokens:['chip','input','marker-serial'],copy:'bindings are artifact-first; no raw path fallback'},
+  mount(stage,ctl,note){
+    let val=['artifact-001','artifact-002'];
+    const el=h(`<label class="field" style="width:min(520px,100%)"><span class="lbl">Output bindings</span>
+      <div class="stack" style="gap:8px">
+        <div class="row" id="chips" style="flex-wrap:wrap;gap:6px"></div>
+        <div class="row" style="gap:8px"><select class="input" id="sel"></select><button class="btn" id="aa" style="flex:none">Bind artifact</button></div>
+      </div></label>`);
+    function draw(){
+      const sel=el.querySelector('#sel');
+      sel.innerHTML='<option value="">Select an artifact definition</option>'+ARTIFACTS.filter(a=>!val.includes(a.artifact_id)).map(a=>`<option value="${a.artifact_id}">${a.name} (${a.artifact_id})</option>`).join('');
+      const c=el.querySelector('#chips');
+      c.innerHTML=val.length?'':'<span class="type-meta">No bindings yet — output not yet forged.</span>';
+      val.forEach((it,i)=>{
+        const art=ARTIFACTS.find(a=>a.artifact_id===it);
+        const chip=h(`<span class="chip"><span class="ty">artifact</span><span class="mono">${esc(art?art.name+' · '+art.artifact_id:it)}</span><button class="x">×</button></span>`);
+        chip.querySelector('.x').onclick=()=>{val.splice(i,1);draw();};
+        c.append(chip);
+      });
+    }
+    el.querySelector('#aa').onclick=()=>{const v=el.querySelector('#sel').value;if(!v||val.includes(v))return;val.push(v);draw();};
+    stage.append(el);
+    note.textContent='Every chip carries its type prefix. Compatibility fallout from a binding change surfaces on the graph, not here.';
+    draw();
+  }});
+
+add({id:'nodeform',group:'Forms',title:'Node contract form',desc:'The full node contract as a contract instrument: rule pills toggle enforcement, the model select unlocks its efforts, list fields hold the scoped lists. Reserved fields say why they are reserved.',src:'frontend/src/components/NodeForm.jsx',
+  spec:{tokens:['card','spec-sheet','input','sig','chip'],motion:['field-focus on inputs','commit-structural on save'],copy:'contract is the canonical noun; blueprint is support flavor'},
+  mount(stage,ctl,note){
+    const st={model:'',rules:['G-001']};
+    const el=h(`<form class="panel" onsubmit="return false" style="width:min(940px,100%);padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div style="border-bottom:1px solid var(--line-subtle);padding-bottom:10px">
+        <div class="type-title">Node contract</div>
+        <span class="type-meta">blueprint sheet — authored config the runtime enforces</span></div>
+      <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <label class="field"><span class="lbl">Name</span><input class="input" value="Architect" placeholder="Agent name"></label>
+        <label class="field"><span class="lbl">Provider</span><select class="input"><option>claude</option><option>codex</option></select></label>
+        <label class="field"><span class="lbl">Tags</span><input class="input" value="architect, review"></label>
+      </div>
+      <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <label class="field"><span class="lbl">Model</span><select class="input" id="model"><option value="">(provider default)</option>${CATALOG.providers.map(g=>`<optgroup label="${g.provider}">${g.models.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</optgroup>`).join('')}</select></label>
+        <label class="field"><span class="lbl">Effort</span><select class="input" id="effort" disabled><option value="">select a model first</option></select></label>
+        <label class="field"><span class="lbl">Working directory</span><div class="row" style="gap:8px"><input class="input mono" placeholder="path/to/repo"><button class="btn" style="flex:none" id="browse">Browse</button></div></label>
+      </div>
+      <label class="field"><span class="lbl">Rules — enforced guardrails</span><div class="row" id="rules" style="flex-wrap:wrap;gap:6px"></div>
+        <span class="field-note">Toggled rules are enforced against this node's authored config at runtime.</span></label>
+      <div id="mount" class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))"></div>
+      <div class="form-grid" style="grid-template-columns:2fr 1fr;align-items:end">
+        <label class="field"><span class="lbl">Context policy — reserved</span><input class="input" disabled placeholder="reserved">
+          <span class="field-note">No runtime effect until context compression lands (T-prompt-compression).</span></label>
+        <div class="row" style="gap:8px;justify-content:flex-end;padding-bottom:20px">
+          <button class="btn btn-commit" id="save">Create node</button>
+          <button class="btn btn-ghost" id="cancel">Cancel</button></div>
+      </div>
+    </form>`);
+    function drawRules(){
+      const r=el.querySelector('#rules');r.innerHTML='';
+      RULES.forEach(rule=>{
+        const on=st.rules.includes(rule.id);
+        const b=h(`<button type="button" title="${rule.id} — ${rule.name}" class="sig ${on?'sig-live':''} sig--bare" style="cursor:pointer;border:none">${rule.short} <span style="opacity:.6">${rule.id}</span></button>`);
+        b.onclick=()=>{st.rules=on?st.rules.filter(x=>x!==rule.id):[...st.rules,rule.id];drawRules();};
+        r.append(b);
+      });
+    }
+    drawRules();
+    el.querySelector('#model').onchange=e=>{
+      st.model=e.target.value;
+      const m=CATALOG.providers.flatMap(g=>g.models).find(x=>x.id===st.model);
+      const ef=el.querySelector('#effort');
+      ef.disabled=!st.model;
+      ef.innerHTML=st.model?'<option value="">(default)</option>'+(m?m.efforts:[]).map(x=>`<option>${x}</option>`).join(''):'<option value="">select a model first</option>';
+    };
+    const listField=(label,ph)=>{
+      let v=[];
+      const w=h(`<label class="field"><span class="lbl">${label}</span><div class="row lf-chips" style="flex-wrap:wrap;gap:6px"></div>
+        <div class="row" style="gap:8px;margin-top:6px"><input class="input mono" placeholder="${ph}"><button type="button" class="btn" style="flex:none">Add</button></div></label>`);
+      const draw=()=>{const c=w.querySelector('.lf-chips');c.innerHTML=v.length?'':'<span class="type-meta">No entries yet.</span>';
+        v.forEach((it,i)=>{const ch=h(`<span class="chip"><span class="mono">${esc(it)}</span><button type="button" class="x">×</button></span>`);ch.querySelector('.x').onclick=()=>{v.splice(i,1);draw();};c.append(ch);});};
+      const inp=w.querySelector('input');
+      const addf=()=>{const x=inp.value.trim();if(!x||v.includes(x)){inp.value='';return;}v.push(x);inp.value='';draw();};
+      w.querySelector('.btn').onclick=addf;
+      inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addf();}};
+      draw();return w;
+    };
+    const mnt=el.querySelector('#mount');
+    [['Inputs','agents/specs/028.md'],['Outputs','agents/handoffs/028.md'],['Skills','skill:tdd'],['Skill obligations','skill:tdd'],['Allowed paths','frontend/src'],['Allowed tools','shell_command']].forEach(([l,p])=>mnt.append(listField(l,p)));
+    el.querySelector('#browse').onclick=()=>announce('Directory picker — desktop bridge only');
+    el.querySelector('#save').onclick=()=>{el.classList.add('fx-commit');announce('Node contract saved');};
+    el.querySelector('#cancel').onclick=()=>announce('Cancelled — no changes written');
+    stage.append(el);
+    note.textContent='Rule pills toggle enforcement; picking a model unlocks its efforts; reserved fields are motionless and say why they are disabled.';
+  }});
+
+add({id:'artifactform',group:'Forms',title:'Artifact definition form',desc:'Authors an artifact definition. Each required heading becomes an inspection predicate; min-items tightens the tolerance. Best-practices / antipatterns / examples flow to the producing node as context.',src:'frontend/src/components/ArtifactForm.jsx',
+  spec:{tokens:['panel','spec-sheet','input'],motion:['commit-structural on save'],copy:'headings are tolerances the output must meet'},
+  mount(stage,ctl,note){
+    let heads=[{heading:'Problem Statement',required:true,min:''},{heading:'User Stories',required:true,min:'3'}];
+    const el=h(`<form class="panel" onsubmit="return false" style="width:min(940px,100%);padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div class="row" style="justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--line-subtle);padding-bottom:10px;flex-wrap:wrap;gap:10px">
+        <div><div class="type-title">Artifact definition</div>
+        <span class="type-meta">spec sheet — bindable to node inputs and outputs</span></div>
+        <div class="row" style="gap:8px">
+          <button class="btn btn-commit" id="save">Create artifact</button>
+          <button class="btn btn-ghost">Cancel</button></div></div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <label class="field"><span class="lbl">Name</span><input class="input" value="PRD Spec" placeholder="Release Checklist"></label>
+        <label class="field"><span class="lbl">Tags</span><input class="input" value="product" placeholder="release, qa"></label>
+      </div>
+      <label class="field"><span class="lbl">Required headings — inspection predicates</span><div id="heads" class="stack" style="gap:8px"></div>
+        <span class="field-note">Reserved sections are added automatically: Predicates, Good Looks Like, Antipatterns, Examples.</span></label>
+      <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <label class="field"><span class="lbl">Best practices</span><textarea class="input" rows="4" placeholder="Describe what good looks like."></textarea></label>
+        <label class="field"><span class="lbl">Antipatterns</span><textarea class="input" rows="4" placeholder="Describe what to avoid."></textarea></label>
+        <label class="field"><span class="lbl">Examples</span><textarea class="input" rows="4" placeholder="Add examples or sample bullets."></textarea></label>
+      </div></form>`);
+    function draw(){
+      const box=el.querySelector('#heads');box.innerHTML='';
+      if(!heads.length)box.append(h(`<div class="card dither" style="border-style:dashed;padding:12px"><span class="type-meta">No heading rules yet — output gate stays open.</span></div>`));
+      heads.forEach((hd,i)=>{
+        const r=h(`<div class="spec-sheet" style="padding:10px"><div style="display:grid;grid-template-columns:1.6fr auto auto auto;gap:8px;align-items:center">
+          <input class="input hh" value="${esc(hd.heading)}" placeholder="Acceptance Criteria">
+          <label class="row" style="gap:6px;border:1px solid var(--line-subtle);padding:6px 10px;font-size:12px;color:var(--text-secondary)"><input type="checkbox" class="rq" ${hd.required?'checked':''}>required</label>
+          <input type="number" min="1" class="input mn" style="width:90px" value="${hd.min}" placeholder="min">
+          <button type="button" class="btn btn-danger btn-sm rm">Remove</button></div></div>`);
+        r.querySelector('.hh').oninput=e=>hd.heading=e.target.value;
+        r.querySelector('.rq').onchange=e=>hd.required=e.target.checked;
+        r.querySelector('.mn').oninput=e=>hd.min=e.target.value;
+        r.querySelector('.rm').onclick=()=>{heads.splice(i,1);draw();};
+        box.append(r);
+      });
+      const addb=h(`<button type="button" class="btn btn-sm" style="align-self:flex-start">Add heading</button>`);
+      addb.onclick=()=>{heads.push({heading:'',required:true,min:''});draw();};
+      box.append(addb);
+    }
+    el.querySelector('#save').onclick=()=>{el.classList.add('fx-commit');announce('Artifact saved → agents/artifacts/artifact-003.md');};
+    stage.append(el);
+    note.textContent='Add/remove headings; toggle required; set min items. Each heading is a tolerance the produced output must meet at the gate.';
+    draw();
+  }});
+
+/* ================= CODE + RUN ================= */
+add({id:'codeview',group:'Code + Run',title:'Code browser',desc:'Read-only repo evidence: repo select, expandable file tree, and a highlighted viewer with language and byte size. Machine-owned values in mono throughout.',src:'frontend/src/components/CodeView.jsx',
+  spec:{tokens:['panel','card--inset','font-mono'],motion:['disclose-inline on dir expand']},
+  mount(stage,ctl,note){
+    const tree=[
+      {name:'agents',type:'dir',children:[{name:'artifacts',type:'dir',children:[{name:'node-001.json',type:'file'}]}]},
+      {name:'hephaestus',type:'dir',children:[{name:'workflow_runtime.py',type:'file'},{name:'store',type:'dir',children:[{name:'artifacts.py',type:'file'}]}]}];
+    const FILE={content:'def apply_migrations(conn):\n    current = _schema_version(conn)\n    if current < 3:\n        conn.executescript(_SCHEMA_V3)\n        _set_schema_version(conn, 3)\n    return applied'};
+    const wrap=h(`<div style="display:grid;grid-template-columns:250px 1fr;gap:12px;width:min(800px,100%)">
+      <aside class="panel" style="overflow:hidden">
+        <div style="border-bottom:1px solid var(--line-subtle);padding:8px 12px"><span class="lbl" style="margin:0">repo · hephustus</span></div>
+        <div id="tree" style="padding:6px 0;max-height:320px;overflow:auto"></div></aside>
+      <section class="panel" style="overflow:hidden">
+        <header class="kv" style="border-bottom:1px solid var(--line-subtle);padding:8px 14px">
+          <span class="mono" style="font-size:13px;color:var(--text-secondary)">hephaestus/workflow_runtime.py</span>
+          <span class="type-meta">python · 1841 B</span></header>
+        <pre id="code" class="scanlines" style="margin:0;padding:12px 16px;max-height:320px;overflow:auto;font-family:var(--font-mono);font-size:12px;line-height:1.7;background:var(--ground-0)"></pre></section></div>`);
+    function renderTree(list,depth,box){
+      list.forEach(e=>{
+        const isDir=e.type==='dir';
+        const row=h(`<div><button class="trow" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:4px 8px;padding-left:${depth*14+12}px;font-family:var(--font-mono);font-size:13.5px;color:var(--text-secondary)">
+          <span style="width:10px;color:var(--text-muted)">${isDir?'+':'·'}</span><span>${e.name}</span></button><div class="kids" style="display:none"></div></div>`);
+        const kids=row.querySelector('.kids');
+        row.querySelector('.trow').onclick=(ev)=>{
+          if(isDir){const open=kids.style.display==='block';kids.style.display=open?'none':'block';
+            if(!open)kids.classList.add('fx-disclose');
+            ev.currentTarget.querySelector('span').textContent=open?'+':'−';}
+          else announce('Opened '+e.name);};
+        if(isDir&&e.children)renderTree(e.children,depth+1,kids);
+        box.append(row);
+      });
+    }
+    renderTree(tree,0,wrap.querySelector('#tree'));
+    const hl=(code)=>esc(code)
+      .replace(/\b(def|if|return|import|from|class)\b/g,'<span style="color:var(--signal-stale)">$1</span>')
+      .replace(/\b(\d+)\b/g,'<span style="color:var(--signal-warn)">$1</span>')
+      .replace(/(_SCHEMA_V3|_schema_version|_set_schema_version|apply_migrations)/g,'<span style="color:var(--text-primary);text-shadow:var(--glow-text-live)">$1</span>');
+    wrap.querySelector('#code').innerHTML=hl(FILE.content);
+    stage.append(wrap);
+    note.textContent='Directories disclose inline; the viewer is evidence — exact source, language, size.';
+  }});
+
+add({id:'runagent',group:'Code + Run',title:'Run agent',desc:'Fire a one-off agent: provider, tags, optional issue and working dir, prompt. Output streams as emitted lines — content / thinking / tool / error tone-coded, appended progressively.',src:'frontend/src/components/RunAgent.jsx',
+  spec:{tokens:['panel','card--inset','sig-live','font-mono'],motion:['trace-stream per line','pending-scan while streaming'],copy:'stream kinds labeled, not decorated'},
+  mount(stage,ctl,note){
+    const EV=[
+      {k:'system',c:'lifecycle',t:'run started'},
+      {k:'thinking',c:'thinking',t:'Planning: inspect the failing migration.'},
+      {k:'tool',c:'tool',t:'Read hephaestus/store/db.py'},
+      {k:'text',c:'content',t:'The DB is a stale legacy schema; reset resolves it.'}];
+    const catCol={content:'var(--text-primary)',thinking:'var(--signal-stale)',lifecycle:'var(--text-muted)',tool:'var(--signal-live)',error:'var(--signal-stop)'};
+    const el=h(`<div style="display:grid;grid-template-columns:330px 1fr;gap:12px;width:min(820px,100%)">
+      <aside class="panel" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <label class="field"><span class="lbl">Provider</span><select class="input"><option>claude</option><option>codex</option></select></label>
+        <label class="field"><span class="lbl">Tags</span><input class="input" value="architect"></label>
+        <label class="field"><span class="lbl">Issue — optional</span><input class="input mono" placeholder="issue-003"></label>
+        <label class="field"><span class="lbl">Working dir — optional</span><input class="input mono" placeholder="path to target repo"></label>
+        <label class="field"><span class="lbl">Prompt</span><textarea class="input" rows="5">Diagnose the desktop launch failure.</textarea></label>
+        <button class="btn btn-commit" id="run">Run agent</button>
+        <div class="spec-sheet" style="padding:8px 10px"><div class="kv"><span class="k">routed to</span><span class="v">claude</span></div></div></aside>
+      <section class="panel" style="overflow:hidden;display:flex;flex-direction:column">
+        <header class="kv" style="border-bottom:1px solid var(--line-subtle);padding:8px 14px">
+          <span class="type-title" style="font-size:13px">Agent output</span>
+          <span id="streamsig" style="display:none">${sig('live','streaming')}</span></header>
+        <div id="out" class="scanlines" style="flex:1;padding:14px 16px;font-family:var(--font-mono);font-size:13.5px;min-height:220px;color:var(--text-muted);background:var(--ground-0);line-height:1.8">Configure a task and run an agent. Output streams here.</div></section></div>`);
+    el.querySelector('#run').onclick=()=>{
+      const out=el.querySelector('#out');out.innerHTML='';out.classList.add('pending-scan','stream-hold');
+      el.querySelector('#streamsig').style.display='inline';
+      let i=0;
+      const tick=()=>{
+        if(i>=EV.length){el.querySelector('#streamsig').style.display='none';out.classList.remove('pending-scan','stream-hold');return;}
+        const e=EV[i++];
+        out.append(h(`<div class="fx-stream" style="color:${catCol[e.c]};position:relative;z-index:2"><span style="color:var(--text-muted)">[${e.k}] </span>${esc(e.t)}</div>`));
+        setTimeout(tick,420);
+      };
+      tick();
+    };
+    stage.append(el);
+    note.textContent='New lines emit with trace-stream; existing lines never re-animate. Pending-scan runs only while the stream is genuinely unresolved.';
+  }});
+
+/* ================= NOT MOUNTED ================= */
+add({id:'dashboard',group:'Not mounted',title:'Pipeline dashboard',desc:'Per-issue grid of stage markers (Spec / Handoff / Review / QA / Log). Exists in the codebase but is not wired into the current nav.',src:'frontend/src/components/Dashboard.jsx (unmounted)',
+  spec:{tokens:['panel','sig-*','marker-serial']},
+  mount(stage){
+    const stageSig=(k,s)=>s==='ok'?sig('pass',k):s==='pending'?sig('warn',k):`<span class="sig" style="opacity:.55">${k}</span>`;
+    const issues=[
+      {id:'issue-028',state:sig('pass','done'),title:'Node authoring',stages:{spec:'ok',handoff:'ok',review:'ok',qa:'ok',log:'ok'}},
+      {id:'issue-029',state:sig('stale','qa pending'),title:'Artifact authoring',stages:{spec:'ok',handoff:'ok',review:'ok',qa:'pending',log:'none'}}];
+    const el=h(`<section class="panel" style="width:min(680px,100%)">
+      <header class="kv" style="border-bottom:1px solid var(--line-subtle);padding:10px 16px">
+        <span class="type-title" style="font-size:13px">Pipeline dashboard</span><span class="type-meta">${issues.length} issues</span></header>
+      <div id="b"></div></section>`);
+    const b=el.querySelector('#b');
+    issues.forEach(it=>{
+      b.append(h(`<div style="display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px 16px;border-top:1px solid var(--line-subtle)">
+        <div><div class="row" style="gap:8px">${serial(it.id)}${it.state}</div><div style="margin-top:4px;font-size:13px;color:var(--text-primary)">${it.title}</div></div>
+        <div class="row" style="gap:5px">${['spec','handoff','review','qa','log'].map(k=>stageSig(k,it.stages[k])).join('')}</div></div>`));
+    });
+    stage.append(el);
+  }});
+
+add({id:'violations',group:'Not mounted',title:'Compliance monitor',desc:'Sorted open violations with rule id, severity, message, fix hint, and the touched artifact. The all-clear state is calm and still — no celebration.',src:'frontend/src/components/Violations.jsx (unmounted)',
+  spec:{tokens:['panel','sig-stop','sig-warn','marker-serial'],motion:['alarm-hard on new violation','calm resolution when clear'],copy:'violations name the rule and the fix'},
+  mount(stage,ctl,note){
+    let empty=false;
+    const V=[
+      {rule_id:'G-001',severity:'stop',issue_id:'issue-029',message:'Write outside allowed paths.',fix:'Add frontend/src to allowed_paths.',artifact:'frontend/src/api.js'},
+      {rule_id:'G-003',severity:'warn',issue_id:'issue-029',message:'Skill obligation tdd not declared.',fix:'Add skill:tdd to obligations.',artifact:'node-002'}];
+    function draw(){
+      stage.innerHTML='';
+      const el=h(`<section class="panel" style="width:min(600px,100%)">
+        <header class="kv" style="border-bottom:1px solid var(--line-subtle);padding:10px 16px">
+          <span class="type-title" style="font-size:13px">Compliance monitor</span>
+          ${empty?sig('pass','0 open'):sig('stop',V.length+' open')}</header>
+        <div id="b"></div></section>`);
+      const b=el.querySelector('#b');
+      if(empty){
+        b.append(h(`<div class="dither" style="padding:40px 20px;text-align:center">
+          <div class="mono" style="font-size:13px;color:var(--signal-pass)">ALL CHECKS PASSED</div>
+          <p class="type-meta" style="margin:6px 0 0">No open violations. Nothing requires attention.</p></div>`));
+      }else{
+        V.forEach(v=>b.append(h(`<div class="${v.severity==='stop'?'fx-alarm-hard fx-glitch':''}" style="padding:12px 16px;border-top:1px solid var(--line-subtle);border-left:2px solid ${v.severity==='stop'?'var(--stop-58)':'var(--warn-52)'}">
+          <div class="row" style="gap:8px;flex-wrap:wrap">${sig(v.severity,v.severity==='stop'?'violation':'caution')}${serial(v.rule_id)}${serial(v.issue_id)}</div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--text-primary)">${v.message}</p>
+          <p class="type-meta" style="margin:3px 0 0">fix: ${v.fix}</p>
+          <p class="mono" style="margin:3px 0 0;font-size:12px;color:var(--text-muted)">${v.artifact}</p></div>`)));
+      }
+      stage.append(el);
+    }
+    ctl.append(segCtl([{key:'open',label:'2 open'},{key:'clear',label:'all clear'}],'open',k=>{empty=k==='clear';draw();}));
+    note.textContent='Each violation names the rule, the fix, and the touched artifact. The empty state is deliberately motionless.';
+    draw();
+  }});
+
+/* ============================================================
+   SHELL WIRING
+   ============================================================ */
+const groups=[...new Set(C.map(c=>c.group))];
+const nav=$('#nav');
+let activeId=null;
+
+function buildNav(q){
+  nav.innerHTML='';
+  const query=(q||'').toLowerCase();
+  groups.forEach(g=>{
+    const items=C.filter(c=>c.group===g&&(!query||c.title.toLowerCase().includes(query)||c.id.includes(query)));
+    if(!items.length)return;
+    const grp=h(`<div class="nav-group"><h2>${esc(g)}</h2></div>`);
+    items.forEach(c=>{
+      const idx=String(C.indexOf(c)+1).padStart(2,'0');
+      const b=h(`<button class="nav-item${c.id===activeId?' active':''}" data-id="${c.id}"><span class="idx">${idx}</span><span>${esc(c.title)}</span></button>`);
+      b.onclick=()=>select(c.id);
+      grp.append(b);
+    });
+    nav.append(grp);
+  });
+}
+
+function select(id){
+  const c=C.find(x=>x.id===id)||C[0];
+  activeId=c.id;
+  try{history.replaceState(null,'','#'+c.id);}catch(e){/* hash sync unavailable in this context */}
+  nav.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.id===c.id));
+  $('#crumb').textContent=c.group+' / unit '+String(C.indexOf(c)+1).padStart(2,'0');
+  $('#title').textContent=c.title;
+  $('#desc').textContent=c.desc;
+  $('#srcref').innerHTML=esc(c.src||'');
+  const spec=$('#spec');
+  const s=c.spec||{};
+  spec.innerHTML=
+    (s.tokens?`<span><b>tokens</b>${s.tokens.map(t=>`<span class="tok">${esc(t)}</span>`).join(' · ')}</span>`:'')+
+    (s.motion?`<span><b>motion</b>${s.motion.map(m=>`<span class="fam">${esc(m)}</span>`).join(' · ')}</span>`:'')+
+    (s.copy?`<span><b>copy</b>${esc(s.copy)}</span>`:'');
+  spec.style.display=(s.tokens||s.motion||s.copy)?'flex':'none';
+  const stage=$('#stage'),ctl=$('#ctl'),note=$('#ctlnote');
+  stage.innerHTML='';ctl.innerHTML='';note.textContent='';
+  stage.classList.remove('fx-transit');void stage.offsetWidth;stage.classList.add('fx-transit');
+  try{c.mount(stage,ctl,note);}catch(err){stage.innerHTML='<div class="sig sig-stop">mount failed</div><pre class="mono muted" style="font-size:13px">'+esc(err.message)+'</pre>';}
+}
+
+$('#filter').addEventListener('input',e=>buildNav(e.target.value));
+buildNav('');
+const initial=location.hash?location.hash.slice(1):null;
+select(initial&&C.some(c=>c.id===initial)?initial:C[0].id);
+})();
+</script>
+</body>
+</html>
